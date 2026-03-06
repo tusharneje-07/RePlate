@@ -1,0 +1,230 @@
+============================================================
+TABLE: users
+Used By: Consumer, Seller, NGO, Food Inspector, Admin
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) workos_user_id - VARCHAR(255) - UNIQUE - NOT NULL
+3) role - ENUM('CONSUMER','SELLER','NGO','INSPECTOR','ADMIN') - NOT NULL
+4) email - VARCHAR(255) - UNIQUE - NOT NULL
+5) mobile - VARCHAR(20) - NULL
+6) is_active - BOOLEAN - DEFAULT TRUE
+7) is_verified - BOOLEAN - DEFAULT FALSE
+8) created_at - TIMESTAMP - DEFAULT CURRENT_TIMESTAMP
+9) updated_at - TIMESTAMP - AUTO UPDATE
+
+============================================================
+TABLE: consumer_profiles
+Used By: Consumer
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) user_id - BIGINT - FK(users.id) - UNIQUE - NOT NULL
+3) full_name - VARCHAR(150) - NOT NULL
+4) profile_image - VARCHAR(500) - NULL
+5) address - TEXT - NULL
+6) latitude - DECIMAL(10,8) - NULL
+7) longitude - DECIMAL(11,8) - NULL
+8) created_at - TIMESTAMP - DEFAULT CURRENT_TIMESTAMP
+
+============================================================
+TABLE: seller_profiles
+Used By: Seller
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) user_id - BIGINT - FK(users.id) - UNIQUE - NOT NULL
+3) business_name - VARCHAR(200) - NOT NULL
+4) business_type - ENUM('HOTEL','BAKERY','CLOUD_KITCHEN','RESTAURANT','OTHER') - NOT NULL
+5) description - TEXT - NULL
+6) address - TEXT - NOT NULL
+7) city - VARCHAR(100) - NULL
+8) state - VARCHAR(100) - NULL
+9) latitude - DECIMAL(10,8) - NULL
+10) longitude - DECIMAL(11,8) - NULL
+11) open_time - TIME - NULL
+12) close_time - TIME - NULL
+13) fssai_license_no - VARCHAR(100) - NOT NULL
+14) owner_name - VARCHAR(150) - NULL
+15) owner_contact - VARCHAR(20) - NULL
+16) created_at - TIMESTAMP - DEFAULT CURRENT_TIMESTAMP
+
+============================================================
+TABLE: ngo_profiles
+Used By: NGO
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) user_id - BIGINT - FK(users.id) - UNIQUE - NOT NULL
+3) organization_name - VARCHAR(200) - NOT NULL
+4) registration_no - VARCHAR(150) - NULL
+5) address - TEXT - NULL
+6) latitude - DECIMAL(10,8) - NULL
+7) longitude - DECIMAL(11,8) - NULL
+8) contact_person - VARCHAR(150) - NULL
+9) contact_number - VARCHAR(20) - NULL
+10) created_at - TIMESTAMP - DEFAULT CURRENT_TIMESTAMP
+
+============================================================
+TABLE: inspector_profiles
+Used By: Food Inspector
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) user_id - BIGINT - FK(users.id) - UNIQUE - NOT NULL
+3) full_name - VARCHAR(150) - NULL
+4) assigned_city - VARCHAR(100) - NULL
+5) employee_id - VARCHAR(100) - NULL
+6) created_at - TIMESTAMP - DEFAULT CURRENT_TIMESTAMP
+
+============================================================
+TABLE: food_categories
+Used By: All (Filtering & Analytics)
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) name - VARCHAR(100) - UNIQUE - NOT NULL
+3) is_veg - BOOLEAN - DEFAULT TRUE
+
+============================================================
+TABLE: food_items
+Used By: Seller, Consumer(Event Listing), NGO, Inspector
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) listed_by_user_id - BIGINT - FK(users.id) - NOT NULL
+3) listing_type - ENUM('SELLER','CONSUMER_EVENT') - NOT NULL
+4) category_id - BIGINT - FK(food_categories.id) - NOT NULL
+5) food_name - VARCHAR(200) - NOT NULL
+6) description - TEXT - NULL
+7) image_url - VARCHAR(500) - NULL
+8) original_price - DECIMAL(10,2) - NULL (NULL for free NGO event food)
+9) final_price - DECIMAL(10,2) - SYSTEM GENERATED
+10) manufacturing_date - DATETIME - NOT NULL
+11) expiry_date - DATE - NOT NULL
+12) expiry_time - TIME - NOT NULL
+13) weight_per_unit_kg - DECIMAL(6,3) - NOT NULL
+14) total_quantity - INT - NOT NULL
+15) available_quantity - INT - NOT NULL
+16) status - ENUM('PENDING_INSPECTION','APPROVED','REJECTED','EXPIRED','SOLD_OUT') - DEFAULT 'PENDING_INSPECTION'
+17) latitude - DECIMAL(10,8) - NOT NULL
+18) longitude - DECIMAL(11,8) - NOT NULL
+19) created_at - TIMESTAMP - DEFAULT CURRENT_TIMESTAMP
+
+============================================================
+TABLE: inspection_requests
+Used By: Seller, Inspector
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) food_item_id - BIGINT - FK(food_items.id) - UNIQUE - NOT NULL
+3) seller_user_id - BIGINT - FK(users.id) - NOT NULL
+4) inspector_user_id - BIGINT - FK(users.id) - NULL
+5) request_status - ENUM('REQUESTED','SCHEDULED','APPROVED','REJECTED') - DEFAULT 'REQUESTED'
+6) inspection_date - DATETIME - NULL
+7) rejection_reason - TEXT - NULL
+8) created_at - TIMESTAMP - DEFAULT CURRENT_TIMESTAMP
+
+============================================================
+TABLE: orders
+Used By: Consumer, NGO, Seller
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) buyer_user_id - BIGINT - FK(users.id) - NOT NULL
+3) seller_user_id - BIGINT - FK(users.id) - NOT NULL
+4) order_type - ENUM('CONSUMER_PURCHASE','NGO_PURCHASE','NGO_DONATION') - NOT NULL
+5) total_amount - DECIMAL(10,2) - DEFAULT 0
+6) payment_method - ENUM('RAZORPAY','CASH') - NOT NULL
+7) payment_status - ENUM('PENDING','PAID','FAILED','REFUNDED') - DEFAULT 'PENDING'
+8) order_status - ENUM('PLACED','CONFIRMED','READY','COMPLETED','CANCELLED') - DEFAULT 'PLACED'
+9) qr_token - VARCHAR(255) - UNIQUE - NOT NULL
+10) qr_expiry - DATETIME - NOT NULL
+11) pickup_time - DATETIME - NULL
+12) created_at - TIMESTAMP - DEFAULT CURRENT_TIMESTAMP
+
+============================================================
+TABLE: order_items
+Used By: Consumer, NGO, Seller
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) order_id - BIGINT - FK(orders.id) - NOT NULL
+3) food_item_id - BIGINT - FK(food_items.id) - NOT NULL
+4) quantity - INT - NOT NULL
+5) price_per_unit - DECIMAL(10,2) - NOT NULL
+6) total_price - DECIMAL(10,2) - NOT NULL
+
+============================================================
+TABLE: reviews
+Used By: Consumer
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) order_id - BIGINT - FK(orders.id) - UNIQUE - NOT NULL
+3) reviewer_user_id - BIGINT - FK(users.id) - NOT NULL
+4) rating - INT - CHECK(1-5)
+5) review_text - TEXT - NULL
+6) created_at - TIMESTAMP - DEFAULT CURRENT_TIMESTAMP
+
+============================================================
+TABLE: notifications
+Used By: All Roles
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) user_id - BIGINT - FK(users.id) - NOT NULL
+3) title - VARCHAR(200) - NOT NULL
+4) message - TEXT - NOT NULL
+5) is_read - BOOLEAN - DEFAULT FALSE
+6) created_at - TIMESTAMP - DEFAULT CURRENT_TIMESTAMP
+
+============================================================
+TABLE: impact_logs
+Used By: Consumer, Seller, NGO, Inspector (Analytics Engine)
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) user_id - BIGINT - FK(users.id) - NOT NULL
+3) order_id - BIGINT - FK(orders.id) - NULL
+4) food_weight_kg - DECIMAL(10,3) - NOT NULL
+5) co2_saved_kg - DECIMAL(10,3) - NOT NULL
+6) money_saved - DECIMAL(10,2) - NULL
+7) created_at - TIMESTAMP - DEFAULT CURRENT_TIMESTAMP
+
+============================================================
+TABLE: daily_business_stats
+Used By: Seller Dashboard Analytics
+------------------------------------------------------------
+1) seller_user_id - BIGINT - PK + FK(users.id)
+2) stat_date - DATE - PK (Composite with seller_user_id)
+3) total_orders - INT - DEFAULT 0
+4) total_revenue - DECIMAL(12,2) - DEFAULT 0
+5) total_food_saved_kg - DECIMAL(12,3) - DEFAULT 0
+6) total_co2_saved_kg - DECIMAL(12,3) - DEFAULT 0
+
+============================================================
+TABLE: payments
+Used By: Consumer, NGO, Seller
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) order_id - BIGINT - FK(orders.id) - NOT NULL
+3) razorpay_payment_id - VARCHAR(255) - NULL
+4) razorpay_order_id - VARCHAR(255) - NULL
+5) amount - DECIMAL(10,2) - NOT NULL
+6) currency - VARCHAR(10) - DEFAULT 'INR'
+7) payment_status - VARCHAR(50) - NOT NULL
+8) created_at - TIMESTAMP - DEFAULT CURRENT_TIMESTAMP
+
+============================================================
+TABLE: price_snapshots
+Used By: Seller (Competitor Analysis)
+------------------------------------------------------------
+1) id - BIGINT - PK - AUTO_INCREMENT
+2) seller_user_id - BIGINT - FK(users.id) - NOT NULL
+3) category_id - BIGINT - FK(food_categories.id) - NOT NULL
+4) avg_market_price - DECIMAL(10,2) - NOT NULL
+5) snapshot_date - DATE - NOT NULL
+
+============================================================
+
+This covers:
+- All 4 roles
+- Event food listing
+- Inspection workflow
+- QR-based order lifecycle
+- Razorpay integration
+- Analytics & CO2 tracking
+- NGO radius browsing
+- Competitor comparison
+- Review system
+- Notifications
+- Dashboard statistics
+

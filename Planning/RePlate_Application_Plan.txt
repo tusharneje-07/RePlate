@@ -1,0 +1,125 @@
+Replate Description:
+RePlate is a Platform for Serving Surplus Food Items Listing and Marketplace. Where Sellers like (Hotel Owners/Managers, Bakery, Cloud Kitchens etc) Can List Different Items with Item Details such as:
+1) Food Name
+2) Food Category
+3) Food Description
+4) Food Image
+5) Original Price
+6) Manufacturing Date
+7) Expiry Date
+8) Expiry Time
+9) Weight Per Unit (kg)
+10) Quantity
+11) Final Price (This is Not Editable Field; Price Will Be Calculated based on Manufacturing Date + Food Item Type + Location's Weather etc. By the System and It will be Dynamic.
+
+Now Lets Consider a Bakery Owner Listed a Packet of Bread, Now Customer/Consumer will See the Marketplace where he/she can browse items and buy products in whatever final price will be there for that product, will place the order and do the payment (RazorPay) or select cash option. A Token Will be Generated Based on that order (A QR code). Now User will go to the that particular shop and Pick that item, and shopkeeper in example case that Bakery Owner will Scan that QR and Mark it as Completed on this Transaction Both the Consumer/Customer and Seller Database Accordingly. 
+
+There is another big case scenario:
+Let Suppose a Consumer/Customer hosted a Birthday Party or Marriage. Some Food is going to be Waste now he/she will List that Remaining Food on the Platform Where NOGs can Pick the Food Items.
+
+Features:
+1) Consumer/Customer:
+- Can Browse items
+- Can list item (only 24hr expiry window)
+- Can Buy item from seller also user can give optional review -> Out of 5 Stars and Description. 
+- Can Browse Basic Statistics and **Impact**
+
+2) Seller:
+- Can Browse Businesses and items(A simple comparison of competitors’ product prices to understand how your pricing compares in the market.)
+- Can List the Items
+- Can Edit the Listed Items (Only Quantity Must be Editable)
+- Orders display based on listed products. (Listed Product -> Orders)
+- Can Browse Statistics and Impact. On [`dashbaord`]
+- Can List Item for Inspection and Approval (Request gose to admin where Food Inspector will verify the quality and everything. - Only these items can be listed for consumer consumption and public listing) 
+- Profile Updates 
+
+3) NGOs:
+- Browse Food Items (Listed by Sellers)
+- Browse Events (Listed By Consumer/Customer)
+- Can Place Order for Both (Paid for Sellers Listed/ Free for Consumer Listed) QR based order place System (Same as Consumer Order Placing System)
+- Can Browse Map which will show Different Events in 10km Radius.
+- Profile Management
+
+4) Food Inspectors:
+- Can Browse Food Inspection Requests 
+- Can Update the Request Status with Acceptance and Rejection with Reason Based on Quality Standards and Food Inspection Tests.
+- Profile Management
+
+
+Data Need to be Stored:
+1) Consumer/Customer:
+- Authentication (WorkOS Based Secure, Legitimate User Login)
+- Profile (Name, Profile, Contact Details [Email, Mobile Number], Address (Optional, Compulsory while listing event leftover food) 
+- Order Tracking (Exactly Like Zomato) just addup the QR Based System.
+- Notifications
+
+2) Seller:
+- Authentication (WorkOS Based Secure, Legitimate User Login)
+- Profile (Shop/Hotel/Bakery Details [Name, Location, -Time of Open and Close on each day], FASSAI License  Owner Information [Name, Contact No. etc]
+- Food Items [Details of Food and Status Approved or Rejected] 
+- Order Tracking (As per the above given example) 
+
+3) NGOs: 
+- Authentication 
+- Profile 
+- Order Tracking 
+
+4) Food Inspectors 
+- Authentication 
+-  Profile Management
+- Approved Rejection Record
+- Requests for Food Item Inspection
+
+
+[*Most Important*] Analytical Features: 
+1) Consumer/Customer:
+- *CO2 Reduced
+- Total Order placed
+- Total Money Saved
+
+2) Seller:
+- *CO2 Reduced
+- Total Order Placed
+- Total Revenue
+- Order Count (Last 7 Days)
+- Food Saved (kg)
+- Revenue vs. Environmental Impact 
+- Category Vise Food Item vs. Sell
+- Peak Impact Day
+
+3) NGOs:
+- *CO2 Reduced
+- Total Food (kg)
+- Food Donation Activity
+
+4) Food Inspector
+- CO2 Reduced City vise.
+
+Web Pages:
+1) Customer/Consumer:
+i) Market Place (Navigation Bar, Veg Only Toggle, Impact *CO2 Reduced [In Proper Design], Browsing of Items, Selection of Location, Search Bar) 
+ii) My Orders
+iii) My Impact - All Customer/Consumer Statistics (In this Create a button as Share, which will crate one 9:16 Design which includes user_profile details [Photo and Name], and user's stat  (To Share this Image on Social Media))
+iv) Profile Management
+v) Notification
+
+2) Seller:
+i) Dashboard Where all Statistics will be Displayed
+ii) Add Surplus Food Item (Adding Items)
+iii) Manage Listing
+iv) Past Orders (Under Profile Management)
+v) Impact and Analysis (Under Profile Management)
+
+3) NGOs:
+i) Dashboard (In Top Show Welcome Message and Some Stats, Below that a Map based on Current Location and Show Sellers Shops/Hotels/Events in radius of 20km Area)
+ii) Browsing of Food Item (with Filters)
+iii) Statistics all Statistics
+iv) Profile Management
+
+4) Food Inspector:
+i) Food Inspection Requests List  
+ii) Food Inspection Request, Meet Scheduling, Address and On Map Location Display, redirection to Google Map etc.
+iii) Statistics of Complete City
+
+Components:
+Navigation Bar: Includes Links, Notification Icon and Profile Avatar Link
