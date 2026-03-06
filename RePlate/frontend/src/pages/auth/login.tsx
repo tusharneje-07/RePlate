@@ -43,7 +43,7 @@ export function LoginPage() {
 		setError(null)
 		setIsLoading(true)
 		try {
-			const { data } = await authApi.getAuthorizeUrl(hint)
+			const { data } = await authApi.getAuthorizeUrl(hint, window.location.origin)
 			window.location.href = data.authorization_url
 		} catch {
 			setError('Could not reach the server. Please try again.')

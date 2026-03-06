@@ -90,9 +90,12 @@ export interface MeResponse {
 }
 
 export const authApi = {
-	getAuthorizeUrl: (screenHint?: 'sign-in' | 'sign-up') =>
+	getAuthorizeUrl: (screenHint?: 'sign-in' | 'sign-up', state?: string) =>
 		api.get<AuthorizeResponse>('/auth/authorize', {
-			params: screenHint ? { screen_hint: screenHint } : undefined,
+			params: {
+				...(screenHint ? { screen_hint: screenHint } : {}),
+				...(state ? { state } : {}),
+			},
 		}),
 
 	assignRole: (role: 'CONSUMER' | 'SELLER' | 'NGO') =>
