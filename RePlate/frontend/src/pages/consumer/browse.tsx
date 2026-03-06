@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { staggerContainer, fadeIn, slideDown } from '@/lib/motion'
 import { useUIStore } from '@/stores/ui-store'
+import { useLocationStore } from '@/stores/location-store'
 import { listingsApi } from '@/lib/api'
 import { mapListingToFoodItem } from '@/lib/mappers'
 import type { FoodFilters } from '@/types'
@@ -21,10 +22,18 @@ export function BrowsePage() {
 	const [layout, setLayout] = useState<'grid' | 'list'>('grid')
 	const [showFilters, setShowFilters] = useState(false)
 	const { searchQuery } = useUIStore()
+	const { location, discoveryRadiusMeters } = useLocationStore()
 
 	const { data: listings = [], isLoading } = useQuery({
-		queryKey: ['listings', 'browse'],
-		queryFn: () => listingsApi.browse().then((r) => r.data),
+		queryKey: ['listings', 'browse', location?.lat, location?.lng, discoveryRadiusMeters, filters.maxDistance],
+		queryFn: () =>
+			listingsApi
+				.browse({
+					lat: location?.lat,
+					lng: location?.lng,
+					radius_km: (filters.maxDistance ?? discoveryRadiusMeters) / 1000,
+				})
+				.then((r) => r.data),
 	})
 
 	const foodItems = listings.map(mapListingToFoodItem)

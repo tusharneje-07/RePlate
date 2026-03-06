@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import {
 	Mail, Phone, MapPin, Star, Package, Leaf, TreePine, Sprout, Flame,
-	ChevronRight, Edit3, Camera, Award, Loader2, Trash2, AlertTriangle, X,
+	ChevronRight, Edit3, Camera, Award, Loader2, Trash2, AlertTriangle, X, LogOut,
 	type LucideIcon,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -26,7 +26,7 @@ const levelConfig: Record<string, { label: string; icon: LucideIcon; color: 'mut
 }
 
 export function ProfilePage() {
-	const { user, deleteAccount } = useAuth()
+	const { user, deleteAccount, logout } = useAuth()
 
 	// Real impact data
 	const { data: impactOut } = useQuery({
@@ -334,6 +334,32 @@ export function ProfilePage() {
 				</p>
 			</motion.div>
 		)}
+
+		{/* Danger Zone */}
+		<motion.div
+			variants={slideUp}
+			className='rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface-card)] overflow-hidden'
+		>
+			<div className='px-4 py-3 border-b border-[var(--color-border-subtle)]'>
+				<p className='text-sm font-semibold text-[var(--color-text-primary)]'>Session</p>
+			</div>
+			<div className='px-4 py-4 flex items-start justify-between gap-4'>
+				<div className='flex-1 min-w-0'>
+					<p className='text-sm font-medium text-[var(--color-text-primary)]'>Sign Out</p>
+					<p className='text-xs text-[var(--color-text-muted)] mt-0.5 leading-relaxed'>
+						Sign out of your account on this device.
+					</p>
+				</div>
+				<button
+					type='button'
+					onClick={() => logout()}
+					className='flex items-center gap-1.5 px-3 py-2 rounded-[var(--radius-md)] bg-[var(--color-brand-accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all flex-shrink-0'
+				>
+					<LogOut size={13} />
+					Sign Out
+				</button>
+			</div>
+		</motion.div>
 
 		{/* Danger Zone */}
 		<motion.div

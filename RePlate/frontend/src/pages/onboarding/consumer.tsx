@@ -14,6 +14,20 @@ import {
 	Loader2,
 	LocateFixed,
 	AlertCircle,
+	Salad,
+	Sprout,
+	Drumstick,
+	Wheat,
+	Milk,
+	HandMetal,
+	Croissant,
+	UtensilsCrossed,
+	Coffee,
+	ShoppingCart,
+	CandyOff,
+	Utensils,
+	Cookie,
+	Apple,
 } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
@@ -103,24 +117,24 @@ const STEPS = [
 ]
 
 // ── Option data ───────────────────────────────────────────────
-const DIETARY_OPTIONS: { value: DietaryTag; label: string; emoji: string }[] = [
-	{ value: 'veg', label: 'Vegetarian', emoji: '🥗' },
-	{ value: 'vegan', label: 'Vegan', emoji: '🌱' },
-	{ value: 'non-veg', label: 'Non-veg', emoji: '🍗' },
-	{ value: 'gluten-free', label: 'Gluten-free', emoji: '🌾' },
-	{ value: 'dairy-free', label: 'Dairy-free', emoji: '🥛' },
-	{ value: 'jain', label: 'Jain', emoji: '🙏' },
+const DIETARY_OPTIONS: { value: DietaryTag; label: string; icon: React.ReactNode }[] = [
+	{ value: 'veg', label: 'Vegetarian', icon: <Salad size={15} /> },
+	{ value: 'vegan', label: 'Vegan', icon: <Sprout size={15} /> },
+	{ value: 'non-veg', label: 'Non-veg', icon: <Drumstick size={15} /> },
+	{ value: 'gluten-free', label: 'Gluten-free', icon: <Wheat size={15} /> },
+	{ value: 'dairy-free', label: 'Dairy-free', icon: <Milk size={15} /> },
+	{ value: 'jain', label: 'Jain', icon: <HandMetal size={15} /> },
 ]
 
-const CATEGORY_OPTIONS: { value: FoodCategory; label: string; emoji: string }[] = [
-	{ value: 'bakery', label: 'Bakery', emoji: '🥐' },
-	{ value: 'restaurant', label: 'Restaurant', emoji: '🍽️' },
-	{ value: 'cafe', label: 'Cafe', emoji: '☕' },
-	{ value: 'grocery', label: 'Grocery', emoji: '🛒' },
-	{ value: 'sweets', label: 'Sweets', emoji: '🍬' },
-	{ value: 'meals', label: 'Meals', emoji: '🍱' },
-	{ value: 'snacks', label: 'Snacks', emoji: '🍿' },
-	{ value: 'fruits', label: 'Fruits', emoji: '🍎' },
+const CATEGORY_OPTIONS: { value: FoodCategory; label: string; icon: React.ReactNode }[] = [
+	{ value: 'bakery', label: 'Bakery', icon: <Croissant size={18} /> },
+	{ value: 'restaurant', label: 'Restaurant', icon: <UtensilsCrossed size={18} /> },
+	{ value: 'cafe', label: 'Cafe', icon: <Coffee size={18} /> },
+	{ value: 'grocery', label: 'Grocery', icon: <ShoppingCart size={18} /> },
+	{ value: 'sweets', label: 'Sweets', icon: <CandyOff size={18} /> },
+	{ value: 'meals', label: 'Meals', icon: <Utensils size={18} /> },
+	{ value: 'snacks', label: 'Snacks', icon: <Cookie size={18} /> },
+	{ value: 'fruits', label: 'Fruits', icon: <Apple size={18} /> },
 ]
 
 const RADIUS_OPTIONS = [1, 2, 5, 10, 20]
@@ -218,7 +232,7 @@ function Step2({
 										: 'border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-brand-accent)] hover:bg-[var(--color-brand-accent-light)]',
 								)}
 							>
-								<span className='text-base leading-none'>{opt.emoji}</span>
+								<span className='leading-none'>{opt.icon}</span>
 								{opt.label}
 							</button>
 						)
@@ -241,7 +255,7 @@ function Step2({
 										: 'border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-brand-accent)] hover:bg-[var(--color-brand-accent-light)]',
 								)}
 							>
-								<span className='text-xl leading-none'>{opt.emoji}</span>
+								<span className='leading-none'>{opt.icon}</span>
 								{opt.label}
 							</button>
 						)

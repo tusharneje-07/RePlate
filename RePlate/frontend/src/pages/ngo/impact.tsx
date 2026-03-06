@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import type React from 'react'
 import { motion } from 'motion/react'
-import { Leaf, Users, Zap, Package, TrendingUp, Award, BarChart2, Calendar } from 'lucide-react'
+import { Leaf, Users, Zap, Package, TrendingUp, Award, BarChart2, Calendar, TreePine, Car, Plane, Flame } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { staggerContainer, slideUp, fadeIn } from '@/lib/motion'
 import { useNGOStore } from '@/stores/ngo-store'
 import { mockNGOImpact } from '@/data/ngo-mock'
+import { CO2_PER_TREE_YEAR, CO2_PER_CAR_KM, CO2_PER_FLIGHT_MUM_DEL } from '@/lib/utils'
 
 // ── Mini bar chart ─────────────────────────────────────────────
 function BarChart({
@@ -77,10 +79,10 @@ function StatCard({
 }
 
 // ── CO₂ equivalents ────────────────────────────────────────────
-const CO2_EQUIVALENTS = [
-	{ label: 'Trees planted for a year', divisor: 21, emoji: '🌳' },
-	{ label: 'Car km not driven', divisor: 0.21, emoji: '🚗' },
-	{ label: 'Flights Mumbai→Delhi avoided', divisor: 130, emoji: '✈️' },
+const CO2_EQUIVALENTS: { label: string; divisor: number; icon: React.ReactNode }[] = [
+	{ label: 'Trees planted for a year', divisor: CO2_PER_TREE_YEAR, icon: <TreePine size={20} /> },
+	{ label: 'Car km not driven', divisor: CO2_PER_CAR_KM, icon: <Car size={20} /> },
+	{ label: 'Flights Mumbai→Delhi avoided', divisor: CO2_PER_FLIGHT_MUM_DEL, icon: <Plane size={20} /> },
 ]
 
 // ── Main Page ──────────────────────────────────────────────────
@@ -123,9 +125,9 @@ export function NGOImpactPage() {
 					{/* ── Streak Banner ── */}
 					<motion.div variants={fadeIn}>
 						<div className='rounded-[var(--radius-xl)] bg-gradient-to-r from-[var(--color-ngo-accent)] to-emerald-500 p-5 text-white flex items-center gap-4 shadow-lg'>
-							<div className='w-14 h-14 bg-white/20 rounded-full flex items-center justify-center text-3xl flex-shrink-0 backdrop-blur-sm'>
-								🔥
-							</div>
+						<div className='w-14 h-14 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0 backdrop-blur-sm'>
+							<Flame size={28} className='text-white' />
+						</div>
 							<div>
 								<p className='text-sm font-semibold text-white/80'>Active Streak</p>
 								<p className='text-3xl font-bold font-[var(--font-display)]'>{impact.streak} days</p>
@@ -189,7 +191,7 @@ export function NGOImpactPage() {
 										key={eq.label}
 										className='rounded-[var(--radius-xl)] bg-white border border-[var(--color-ngo-border)] p-4 flex items-center gap-4'
 									>
-										<span className='text-2xl w-10 text-center flex-shrink-0'>{eq.emoji}</span>
+										<span className='w-10 flex items-center justify-center flex-shrink-0'>{eq.icon}</span>
 										<div className='flex-1'>
 											<p className='text-xs text-[var(--color-ngo-text-muted)]'>{eq.label}</p>
 											<p className='text-xl font-bold font-[var(--font-display)] text-[var(--color-ngo-accent)]'>

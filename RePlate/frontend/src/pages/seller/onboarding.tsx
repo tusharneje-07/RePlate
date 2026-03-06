@@ -19,6 +19,14 @@ import {
 	AlertCircle,
 	Loader2,
 	LocateFixed,
+	X,
+	Croissant,
+	UtensilsCrossed,
+	Coffee,
+	ShoppingCart,
+	CandyOff,
+	Package,
+	Utensils,
 } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
@@ -28,7 +36,7 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import { cn } from '@/lib/utils'
 import { useSellerUIStore } from '@/stores/seller-ui-store'
-import { profileApi } from '@/lib/api'
+import { profileApi, uploadFile } from '@/lib/api'
 import { requestPosition } from '@/lib/geolocation'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -89,6 +97,7 @@ interface OnboardingForm {
 	phone: string
 	category: string
 	description: string
+	logoUrl: string | null   // uploaded URL
 	// Step 2 — Location & hours
 	lat: number | null
 	lng: number | null
@@ -100,20 +109,22 @@ interface OnboardingForm {
 	closedDays: string[]
 	// Step 3 — Documents
 	fssaiLicense: string
+	fssaiCertUrl: string | null   // uploaded URL
 	gstNumber: string
 	bankAccount: string
 	ifsc: string
+	bankStatementUrl: string | null  // uploaded URL
 	// Step 4 — Preview (no inputs)
 }
 
-const CATEGORIES = [
-	{ value: 'bakery', label: 'Bakery', icon: '🥐' },
-	{ value: 'restaurant', label: 'Restaurant', icon: '🍽️' },
-	{ value: 'cafe', label: 'Cafe', icon: '☕' },
-	{ value: 'grocery', label: 'Grocery', icon: '🛒' },
-	{ value: 'sweets', label: 'Sweets', icon: '🍬' },
-	{ value: 'cloud_kitchen', label: 'Cloud Kitchen', icon: '📦' },
-	{ value: 'catering', label: 'Catering', icon: '🍱' },
+const CATEGORIES: { value: string; label: string; icon: React.ReactNode }[] = [
+	{ value: 'bakery', label: 'Bakery', icon: <Croissant size={18} /> },
+	{ value: 'restaurant', label: 'Restaurant', icon: <UtensilsCrossed size={18} /> },
+	{ value: 'cafe', label: 'Cafe', icon: <Coffee size={18} /> },
+	{ value: 'grocery', label: 'Grocery', icon: <ShoppingCart size={18} /> },
+	{ value: 'sweets', label: 'Sweets', icon: <CandyOff size={18} /> },
+	{ value: 'cloud_kitchen', label: 'Cloud Kitchen', icon: <Package size={18} /> },
+	{ value: 'catering', label: 'Catering', icon: <Utensils size={18} /> },
 ]
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -206,21 +217,167 @@ function TextArea({
 	)
 }
 
+// ── Upload dropzone ───────────────────────────────────────────
+function UploadDropzone({
+	label,
+	accept,
+	currentUrl,
+	onUploaded,
+}: {
+	label: string
+	accept: string
+	currentUrl: string | null
+	onUploaded: (url: string) => void
+}) {
+	const [uploading, setUploading] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+	const inputRef = useRef<HTMLInputElement>(null)
+
+	async function handleFile(file: File) {
+		setUploading(true)
+		setError(null)
+		try {
+			const url = await uploadFile(file)
+			onUploaded(url)
+		} catch {
+			setError('Upload failed. Please try again.')
+		} finally {
+			setUploading(false)
+		}
+	}
+
+	return (
+		<div>
+			<input
+				ref={inputRef}
+				type='file'
+				accept={accept}
+				className='hidden'
+				onChange={(e) => {
+					const file = e.target.files?.[0]
+					if (file) handleFile(file)
+					// Reset so same file can be re-selected
+					e.target.value = ''
+				}}
+			/>
+			<div
+				onClick={() => !uploading && inputRef.current?.click()}
+				className={cn(
+					'border-2 border-dashed rounded-[var(--radius-md)] p-4 flex flex-col items-center gap-2',
+					'transition-colors cursor-pointer group',
+					currentUrl
+						? 'border-[var(--color-seller-accent)] bg-[var(--color-seller-accent-light)]'
+						: 'border-[var(--color-seller-border)] hover:border-[var(--color-seller-accent)] hover:bg-[var(--color-seller-accent-light)]',
+					uploading && 'opacity-60 pointer-events-none',
+				)}
+			>
+				{uploading ? (
+					<Loader2 size={20} className='text-[var(--color-seller-accent)] animate-spin' />
+				) : currentUrl ? (
+					<CheckCircle2 size={20} className='text-[var(--color-seller-accent)]' />
+				) : (
+					<Upload size={20} className='text-[var(--color-seller-text-muted)] group-hover:text-[var(--color-seller-accent)]' />
+				)}
+				<p className={cn(
+					'text-xs',
+					currentUrl ? 'text-[var(--color-seller-accent)] font-medium' : 'text-[var(--color-seller-text-muted)] group-hover:text-[var(--color-seller-text-secondary)]',
+				)}>
+					{uploading ? 'Uploading…' : currentUrl ? 'Uploaded — click to replace' : label}
+				</p>
+			</div>
+			{error && <p className='text-[11px] text-[var(--color-error)] mt-1'>{error}</p>}
+		</div>
+	)
+}
+
 // ── Step 1 — Store Identity ──────────────────────────────────
-function Step1({ form, update }: { form: OnboardingForm; update: (k: keyof OnboardingForm, v: string) => void }) {
+function Step1({
+	form,
+	update,
+	setLogoUrl,
+}: {
+	form: OnboardingForm
+	update: (k: keyof OnboardingForm, v: string) => void
+	setLogoUrl: (url: string | null) => void
+}) {
+	const [uploading, setUploading] = useState(false)
+	const [uploadError, setUploadError] = useState<string | null>(null)
+	const logoInputRef = useRef<HTMLInputElement>(null)
+
+	async function handleLogoFile(file: File) {
+		setUploading(true)
+		setUploadError(null)
+		try {
+			const url = await uploadFile(file)
+			setLogoUrl(url)
+		} catch {
+			setUploadError('Logo upload failed. Please try again.')
+		} finally {
+			setUploading(false)
+		}
+	}
+
 	return (
 		<div className='space-y-5'>
 			{/* Logo upload area */}
 			<div className='flex flex-col items-center gap-3 py-4'>
 				<div className='relative'>
-					<div className='w-20 h-20 rounded-full bg-[var(--color-seller-accent-muted)] border-2 border-dashed border-[var(--color-seller-accent)] flex items-center justify-center'>
-						<Camera size={22} className='text-[var(--color-seller-accent)]' />
+					<div
+						onClick={() => !uploading && logoInputRef.current?.click()}
+						className={cn(
+							'w-20 h-20 rounded-full border-2 border-dashed flex items-center justify-center overflow-hidden cursor-pointer transition-colors',
+							form.logoUrl
+								? 'border-[var(--color-seller-accent)]'
+								: 'bg-[var(--color-seller-accent-muted)] border-[var(--color-seller-accent)]',
+						)}
+					>
+						{form.logoUrl ? (
+							<img src={form.logoUrl} alt='Store logo' className='w-full h-full object-cover' />
+						) : uploading ? (
+							<Loader2 size={22} className='text-[var(--color-seller-accent)] animate-spin' />
+						) : (
+							<Camera size={22} className='text-[var(--color-seller-accent)]' />
+						)}
 					</div>
-					<button className='absolute -bottom-1 -right-1 w-7 h-7 bg-[var(--color-seller-accent)] rounded-full flex items-center justify-center shadow-md'>
-						<Upload size={13} className='text-white' />
+					<button
+						type='button'
+						onClick={() => !uploading && logoInputRef.current?.click()}
+						disabled={uploading}
+						className='absolute -bottom-1 -right-1 w-7 h-7 bg-[var(--color-seller-accent)] rounded-full flex items-center justify-center shadow-md disabled:opacity-60'
+					>
+						{uploading ? (
+							<Loader2 size={11} className='text-white animate-spin' />
+						) : form.logoUrl ? (
+							<Camera size={13} className='text-white' />
+						) : (
+							<Upload size={13} className='text-white' />
+						)}
 					</button>
+					{form.logoUrl && (
+						<button
+							type='button'
+							onClick={(e) => { e.stopPropagation(); setLogoUrl(null) }}
+							className='absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shadow-sm'
+						>
+							<X size={10} className='text-white' />
+						</button>
+					)}
 				</div>
-				<p className='text-xs text-[var(--color-seller-text-muted)]'>Upload store logo (optional)</p>
+				<p className='text-xs text-[var(--color-seller-text-muted)]'>
+					{form.logoUrl ? 'Logo uploaded' : 'Upload store logo (optional)'}
+				</p>
+				{uploadError && <p className='text-xs text-red-500'>{uploadError}</p>}
+				<input
+					ref={logoInputRef}
+					type='file'
+					accept='image/jpeg,image/png,image/webp'
+					className='hidden'
+					onChange={(e) => {
+						const file = e.target.files?.[0]
+						if (file) handleLogoFile(file)
+						e.target.value = ''
+					}}
+				/>
 			</div>
 
 			<Field label='Store Name' required>
@@ -273,7 +430,7 @@ function Step1({ form, update }: { form: OnboardingForm; update: (k: keyof Onboa
 									: 'border-[var(--color-seller-border)] text-[var(--color-seller-text-secondary)] hover:border-[var(--color-seller-accent)] hover:bg-[var(--color-seller-accent-light)]',
 							)}
 						>
-							<span className='text-xl'>{c.icon}</span>
+							<span>{c.icon}</span>
 							{c.label}
 						</button>
 					))}
@@ -537,7 +694,17 @@ function Step2({
 }
 
 // ── Step 3 — Documents ───────────────────────────────────────
-function Step3({ form, update }: { form: OnboardingForm; update: (k: keyof OnboardingForm, v: string) => void }) {
+function Step3({
+	form,
+	update,
+	setFssaiCertUrl,
+	setBankStatementUrl,
+}: {
+	form: OnboardingForm
+	update: (k: keyof OnboardingForm, v: string) => void
+	setFssaiCertUrl: (url: string | null) => void
+	setBankStatementUrl: (url: string | null) => void
+}) {
 	return (
 		<div className='space-y-5'>
 			{/* Info banner */}
@@ -558,13 +725,12 @@ function Step3({ form, update }: { form: OnboardingForm; update: (k: keyof Onboa
 				/>
 			</Field>
 
-			{/* FSSAI upload */}
-			<div className='border-2 border-dashed border-[var(--color-seller-border)] rounded-[var(--radius-md)] p-4 flex flex-col items-center gap-2 hover:border-[var(--color-seller-accent)] hover:bg-[var(--color-seller-accent-light)] transition-colors cursor-pointer group'>
-				<Upload size={20} className='text-[var(--color-seller-text-muted)] group-hover:text-[var(--color-seller-accent)]' />
-				<p className='text-xs text-[var(--color-seller-text-muted)] group-hover:text-[var(--color-seller-text-secondary)]'>
-					Upload FSSAI certificate (PDF or JPG)
-				</p>
-			</div>
+			<UploadDropzone
+				label='Upload FSSAI certificate (PDF or JPG)'
+				accept='image/jpeg,image/png,application/pdf'
+				currentUrl={form.fssaiCertUrl}
+				onUploaded={(url) => setFssaiCertUrl(url)}
+			/>
 
 			<Field label='GST Number' hint='Optional — required for invoicing above ₹20L/year'>
 				<TextInput
@@ -595,12 +761,12 @@ function Step3({ form, update }: { form: OnboardingForm; update: (k: keyof Onboa
 				</div>
 			</div>
 
-			<div className='border-2 border-dashed border-[var(--color-seller-border)] rounded-[var(--radius-md)] p-4 flex flex-col items-center gap-2 hover:border-[var(--color-seller-accent)] hover:bg-[var(--color-seller-accent-light)] transition-colors cursor-pointer group'>
-				<Upload size={20} className='text-[var(--color-seller-text-muted)] group-hover:text-[var(--color-seller-accent)]' />
-				<p className='text-xs text-[var(--color-seller-text-muted)] group-hover:text-[var(--color-seller-text-secondary)]'>
-					Upload cancelled cheque or bank statement (PDF or JPG)
-				</p>
-			</div>
+			<UploadDropzone
+				label='Upload cancelled cheque or bank statement (PDF or JPG)'
+				accept='image/jpeg,image/png,application/pdf'
+				currentUrl={form.bankStatementUrl}
+				onUploaded={(url) => setBankStatementUrl(url)}
+			/>
 		</div>
 	)
 }
@@ -625,11 +791,15 @@ function Step4({ form }: { form: OnboardingForm }) {
 			<div className='rounded-[var(--radius-xl)] border border-[var(--color-seller-border)] overflow-hidden bg-white'>
 				{/* Cover */}
 				<div className='h-24 bg-gradient-to-br from-[var(--color-seller-secondary)] to-[var(--color-seller-accent-muted)] flex items-center justify-center'>
-					<span className='text-4xl'>{cat?.icon ?? '🏪'}</span>
+					<span className='text-[var(--color-seller-accent)]'>{cat?.icon ?? <Store size={36} />}</span>
 				</div>
 				<div className='p-4 -mt-6 relative'>
-					<div className='w-14 h-14 rounded-full bg-white border-2 border-[var(--color-seller-border)] flex items-center justify-center text-2xl shadow-sm mb-3'>
-						{cat?.icon ?? '🏪'}
+					<div className='w-14 h-14 rounded-full bg-white border-2 border-[var(--color-seller-border)] flex items-center justify-center shadow-sm mb-3 overflow-hidden text-[var(--color-seller-accent)]'>
+						{form.logoUrl ? (
+							<img src={form.logoUrl} alt='Logo' className='w-full h-full object-cover' />
+						) : (
+							cat?.icon ?? <Store size={22} />
+						)}
 					</div>
 					<h2 className='text-lg font-bold font-[var(--font-display)] text-[var(--color-seller-text-primary)]'>
 						{form.storeName || 'Your Store Name'}
@@ -720,6 +890,7 @@ export function SellerOnboardingPage() {
 		phone: '',
 		category: '',
 		description: '',
+		logoUrl: null,
 		lat: null,
 		lng: null,
 		address: '',
@@ -729,9 +900,11 @@ export function SellerOnboardingPage() {
 		closeTime: '21:00',
 		closedDays: [],
 		fssaiLicense: '',
+		fssaiCertUrl: null,
 		gstNumber: '',
 		bankAccount: '',
 		ifsc: '',
+		bankStatementUrl: null,
 	})
 
 	function update(key: keyof OnboardingForm, value: string) {
@@ -765,14 +938,29 @@ export function SellerOnboardingPage() {
 		setIsSubmitting(true)
 		try {
 			await profileApi.updateSellerProfile({
+				// Step 1
 				business_name: form.storeName || null,
 				business_type: form.category || null,
 				phone_number: form.phone || null,
+				description: form.description || null,
+				logo_url: form.logoUrl,
+				// Step 2
 				address_line1: form.address || null,
 				city: form.city || null,
 				postal_code: form.pincode || null,
 				country: 'IN',
-				description: form.description || null,
+				lat: form.lat,
+				lng: form.lng,
+				open_time: form.openTime || null,
+				close_time: form.closeTime || null,
+				closed_days: form.closedDays.length > 0 ? JSON.stringify(form.closedDays) : null,
+				// Step 3
+				license_number: form.fssaiLicense || null,
+				fssai_certificate_url: form.fssaiCertUrl,
+				gst_number: form.gstNumber || null,
+				bank_account: form.bankAccount || null,
+				ifsc: form.ifsc || null,
+				bank_statement_url: form.bankStatementUrl,
 			})
 		} catch {
 			// Non-blocking — proceed to dashboard even if profile update fails
@@ -898,9 +1086,22 @@ export function SellerOnboardingPage() {
 						exit='exit'
 						transition={{ duration: 0.22, ease: 'easeOut' }}
 					>
-						{step === 0 && <Step1 form={form} update={update} />}
+						{step === 0 && (
+							<Step1
+								form={form}
+								update={update}
+								setLogoUrl={(url) => setForm((f) => ({ ...f, logoUrl: url }))}
+							/>
+						)}
 						{step === 1 && <Step2 form={form} update={update} toggleDay={toggleDay} onGeoResolved={handleGeoResolved} />}
-						{step === 2 && <Step3 form={form} update={update} />}
+						{step === 2 && (
+							<Step3
+								form={form}
+								update={update}
+								setFssaiCertUrl={(url) => setForm((f) => ({ ...f, fssaiCertUrl: url }))}
+								setBankStatementUrl={(url) => setForm((f) => ({ ...f, bankStatementUrl: url }))}
+							/>
+						)}
 						{step === 3 && <Step4 form={form} />}
 					</motion.div>
 				</AnimatePresence>

@@ -1,125 +1,229 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import type { SellerListing, SellerOrder, SellerNotification, SellerOrderStatus } from '@/types'
+import type {
+	SellerAnalytics,
+	SellerListing,
+	SellerNotification,
+	SellerOrder,
+	SellerOrderStatus,
+	SellerProfile,
+	SellerReview,
+} from '@/types'
+import { authApi, profileApi, sellerApi } from '@/lib/api'
 import {
-	mockSellerListings,
-	mockSellerOrders,
-	mockSellerNotifications,
-} from '@/data/seller-mock'
+	mapSellerAnalyticsOutToSellerAnalytics,
+	mapSellerListingOutToSellerListing,
+	mapSellerNotificationOutToSellerNotification,
+	mapSellerOrderOutToSellerOrder,
+	mapSellerProfile,
+	mapSellerReviewOutToSellerReview,
+} from '@/lib/mappers'
 
 interface SellerState {
-	// Listings
 	listings: SellerListing[]
-	addListing: (listing: SellerListing) => void
-	updateListing: (id: string, updates: Partial<SellerListing>) => void
-	deleteListing: (id: string) => void
-	pauseListing: (id: string) => void
-	restockListing: (id: string, quantity: number) => void
-
-	// Orders
 	orders: SellerOrder[]
-	updateOrderStatus: (id: string, status: SellerOrderStatus) => void
-	getOrderById: (id: string) => SellerOrder | undefined
-
-	// Notifications
 	notifications: SellerNotification[]
 	unreadCount: number
-	markNotificationRead: (id: string) => void
-	markAllRead: () => void
+	analytics: SellerAnalytics | null
+	reviews: SellerReview[]
+	profile: SellerProfile | null
+	isHydrating: boolean
+	hasHydrated: boolean
+	error: string | null
 
-	// UI state
+	hydrate: () => Promise<void>
+	refreshListings: () => Promise<void>
+	refreshOrders: () => Promise<void>
+	refreshNotifications: () => Promise<void>
+	refreshAnalytics: () => Promise<void>
+	refreshReviews: () => Promise<void>
+	refreshProfile: () => Promise<void>
+
+	addListing: (listing: SellerListing) => Promise<void>
+	updateListing: (id: string, updates: Partial<SellerListing>) => Promise<void>
+	deleteListing: (id: string) => Promise<void>
+	pauseListing: (id: string) => Promise<void>
+	restockListing: (id: string, quantity: number) => Promise<void>
+
+	updateOrderStatus: (id: string, status: SellerOrderStatus) => Promise<void>
+	getOrderById: (id: string) => SellerOrder | undefined
+
+	markNotificationRead: (id: string) => Promise<void>
+	markAllRead: () => Promise<void>
+
 	selectedOrderTab: SellerOrderStatus | 'all'
 	setSelectedOrderTab: (tab: SellerOrderStatus | 'all') => void
 }
 
-export const useSellerStore = create<SellerState>()(
-	persist(
-		(set, get) => ({
-			// Listings
-			listings: mockSellerListings,
+function listingPayloadFromState(listing: Partial<SellerListing>) {
+	return {
+		name: listing.name,
+		description: listing.description,
+		images: listing.images,
+		category: listing.category,
+		dietary_tags: listing.dietaryTags,
+		allergens: listing.allergens,
+		original_price: listing.originalPrice,
+		discounted_price: listing.discountedPrice,
+		discount_percent: listing.discountPercent,
+		total_quantity: listing.totalQuantity,
+		quantity_available: listing.quantityAvailable,
+		unit: listing.unit,
+		pickup_start: listing.pickupStart,
+		pickup_end: listing.pickupEnd,
+		expires_at: listing.expiresAt,
+		status: listing.status,
+		co2_saved_per_unit: listing.co2SavedPerUnit,
+	}
+}
 
-			addListing: (listing) =>
-				set((s) => ({ listings: [listing, ...s.listings] })),
+export const useSellerStore = create<SellerState>()((set, get) => ({
+	listings: [],
+	orders: [],
+	notifications: [],
+	unreadCount: 0,
+	analytics: null,
+	reviews: [],
+	profile: null,
+	isHydrating: false,
+	hasHydrated: false,
+	error: null,
 
-			updateListing: (id, updates) =>
-				set((s) => ({
-					listings: s.listings.map((l) =>
-						l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString() } : l,
-					),
-				})),
+	refreshListings: async () => {
+		const { data } = await sellerApi.listListings()
+		set({ listings: data.map(mapSellerListingOutToSellerListing) })
+	},
 
-			deleteListing: (id) =>
-				set((s) => ({ listings: s.listings.filter((l) => l.id !== id) })),
+	refreshOrders: async () => {
+		const { data } = await sellerApi.listOrders({ limit: 200 })
+		set({ orders: data.map(mapSellerOrderOutToSellerOrder) })
+	},
 
-			pauseListing: (id) =>
-				set((s) => ({
-					listings: s.listings.map((l) =>
-						l.id === id
-							? { ...l, status: l.status === 'paused' ? 'active' : 'paused', updatedAt: new Date().toISOString() }
-							: l,
-					),
-				})),
+	refreshNotifications: async () => {
+		const { data } = await sellerApi.listNotifications({ limit: 200 })
+		set({
+			notifications: data.notifications.map(mapSellerNotificationOutToSellerNotification),
+			unreadCount: data.unread_count,
+		})
+	},
 
-			restockListing: (id, quantity) =>
-				set((s) => ({
-					listings: s.listings.map((l) =>
-						l.id === id
-							? {
-									...l,
-									quantityAvailable: l.quantityAvailable + quantity,
-									totalQuantity: l.totalQuantity + quantity,
-									status: 'active',
-									updatedAt: new Date().toISOString(),
-								}
-							: l,
-					),
-				})),
+	refreshAnalytics: async () => {
+		const { data } = await sellerApi.getAnalytics()
+		set({ analytics: mapSellerAnalyticsOutToSellerAnalytics(data) })
+	},
 
-			// Orders
-			orders: mockSellerOrders,
+	refreshReviews: async () => {
+		const { data } = await sellerApi.listReviews({ limit: 200 })
+		set({ reviews: data.reviews.map(mapSellerReviewOutToSellerReview) })
+	},
 
-			updateOrderStatus: (id, status) =>
-				set((s) => ({
-					orders: s.orders.map((o) =>
-						o.id === id
-							? {
-									...o,
-									status,
-									updatedAt: new Date().toISOString(),
-									...(status === 'confirmed' ? { confirmedAt: new Date().toISOString() } : {}),
-									...(status === 'completed' ? { completedAt: new Date().toISOString() } : {}),
-								}
-							: o,
-					),
-				})),
+	refreshProfile: async () => {
+		const [{ data: me }, { data: profile }] = await Promise.all([
+			authApi.me(),
+			profileApi.getSellerProfile(),
+		])
+		const analytics = get().analytics ?? undefined
+		set({ profile: mapSellerProfile(me, profile, analytics) })
+	},
 
-			getOrderById: (id) => get().orders.find((o) => o.id === id),
+	hydrate: async () => {
+		if (get().isHydrating) return
+		set({ isHydrating: true, error: null })
+		try {
+			const results = await Promise.allSettled([
+				get().refreshListings(),
+				get().refreshOrders(),
+				get().refreshNotifications(),
+				get().refreshAnalytics(),
+				get().refreshReviews(),
+			])
 
-			// Notifications
-			notifications: mockSellerNotifications,
-			unreadCount: mockSellerNotifications.filter((n) => !n.isRead).length,
+			const profileResult = await Promise.allSettled([get().refreshProfile()])
+			const hasFailure = [...results, ...profileResult].some((r) => r.status === 'rejected')
 
-			markNotificationRead: (id) =>
-				set((s) => {
-					const updated = s.notifications.map((n) =>
-						n.id === id ? { ...n, isRead: true } : n,
-					)
-					return {
-						notifications: updated,
-						unreadCount: updated.filter((n) => !n.isRead).length,
-					}
-				}),
+			set({
+				hasHydrated: true,
+				error: hasFailure ? 'Some seller data failed to load. Please refresh.' : null,
+			})
+		} finally {
+			set({ isHydrating: false })
+		}
+	},
 
-			markAllRead: () =>
-				set((s) => ({
-					notifications: s.notifications.map((n) => ({ ...n, isRead: true })),
-					unreadCount: 0,
-				})),
+	addListing: async (listing) => {
+		const { data } = await sellerApi.createListing(listingPayloadFromState(listing))
+		set((state) => ({ listings: [mapSellerListingOutToSellerListing(data), ...state.listings] }))
+		await get().refreshAnalytics()
+	},
 
-			// UI
-			selectedOrderTab: 'all',
-			setSelectedOrderTab: (tab) => set({ selectedOrderTab: tab }),
-		}),
-		{ name: 'replate-seller' },
-	),
-)
+	updateListing: async (id, updates) => {
+		const { data } = await sellerApi.updateListing(id, listingPayloadFromState(updates))
+		set((state) => ({
+			listings: state.listings.map((listing) =>
+				listing.id === id ? mapSellerListingOutToSellerListing(data) : listing,
+			),
+		}))
+		await get().refreshAnalytics()
+	},
+
+	deleteListing: async (id) => {
+		await sellerApi.deleteListing(id)
+		set((state) => ({ listings: state.listings.filter((listing) => listing.id !== id) }))
+		await get().refreshAnalytics()
+	},
+
+	pauseListing: async (id) => {
+		const listing = get().listings.find((item) => item.id === id)
+		if (!listing) return
+		const nextStatus = listing.status === 'paused' ? 'active' : 'paused'
+		const { data } = await sellerApi.updateListing(id, { status: nextStatus })
+		set((state) => ({
+			listings: state.listings.map((item) =>
+				item.id === id ? mapSellerListingOutToSellerListing(data) : item,
+			),
+		}))
+	},
+
+	restockListing: async (id, quantity) => {
+		const listing = get().listings.find((item) => item.id === id)
+		if (!listing) return
+		await get().updateListing(id, {
+			quantityAvailable: listing.quantityAvailable + quantity,
+			totalQuantity: listing.totalQuantity + quantity,
+			status: 'active',
+		})
+	},
+
+	updateOrderStatus: async (id, status) => {
+		const { data } = await sellerApi.updateOrderStatus(id, { status })
+		set((state) => ({
+			orders: state.orders.map((order) =>
+				order.id === id ? mapSellerOrderOutToSellerOrder(data) : order,
+			),
+		}))
+		await get().refreshAnalytics()
+		await get().refreshNotifications()
+	},
+
+	getOrderById: (id) => get().orders.find((order) => order.id === id),
+
+	markNotificationRead: async (id) => {
+		const { data } = await sellerApi.markNotificationRead(id)
+		set((state) => ({
+			notifications: state.notifications.map((item) =>
+				item.id === id ? mapSellerNotificationOutToSellerNotification(data.notification) : item,
+			),
+			unreadCount: data.unread_count,
+		}))
+	},
+
+	markAllRead: async () => {
+		await sellerApi.markAllNotificationsRead()
+		set((state) => ({
+			notifications: state.notifications.map((item) => ({ ...item, isRead: true })),
+			unreadCount: 0,
+		}))
+	},
+
+	selectedOrderTab: 'all',
+	setSelectedOrderTab: (tab) => set({ selectedOrderTab: tab }),
+}))

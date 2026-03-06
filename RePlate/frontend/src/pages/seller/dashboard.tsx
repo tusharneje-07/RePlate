@@ -29,13 +29,13 @@ import { staggerContainer, slideUp, fadeIn } from '@/lib/motion'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import { useSellerStore } from '@/stores/seller-store'
 import { useSellerUIStore } from '@/stores/seller-ui-store'
-import {
-	mockSellerProfile,
-	mockSellerAnalytics,
-	mockAIPricingSuggestions,
-	mockWeatherSuggestion,
-} from '@/data/seller-mock'
 import { cn } from '@/lib/utils'
+
+const weatherSuggestion = {
+	condition: 'Live weather insights',
+	temperature: 0,
+	recommendation: 'Weather-based pricing suggestions will appear here as seller telemetry grows.',
+}
 
 // ── Helper: greeting ────────────────────────────────────────
 function getGreeting(): string {
@@ -104,7 +104,11 @@ function StatCard({ icon, label, value, change, changeLabel, iconBg, iconColor }
 
 // ── Revenue Bar Chart (pure SVG / CSS) ───────────────────────
 function RevenueChart() {
-	const data = mockSellerAnalytics.dailyRevenue
+	const analytics = useSellerStore((s) => s.analytics)
+	const data = analytics?.dailyRevenue ?? []
+	if (data.length === 0) {
+		return null
+	}
 	const maxRevenue = Math.max(...data.map((d) => d.revenue))
 	const today = new Date().getDay() // 0=Sun, 1=Mon...
 	const dayIndex = today === 0 ? 6 : today - 1 // convert to Mon=0 index
@@ -296,7 +300,8 @@ function OrderBreakdown() {
 
 // ── Top Listings ─────────────────────────────────────────────
 function TopListings() {
-	const topListings = mockSellerAnalytics.topListings.slice(0, 4)
+	const analytics = useSellerStore((s) => s.analytics)
+	const topListings = analytics?.topListings.slice(0, 4) ?? []
 
 	return (
 		<Card className='border-[var(--color-seller-border)] shadow-none'>
@@ -369,7 +374,7 @@ function TopListings() {
 function AIPricingBanner() {
 	const { setAiPricingOpen, setAiPricingListingId } = useSellerUIStore()
 	const { listings } = useSellerStore()
-	const suggestions = mockAIPricingSuggestions
+	const suggestions: Array<{ listingId: string; currentPrice: number; suggestedPrice: number; reasoning: string }> = []
 
 	if (suggestions.length === 0) return null
 
@@ -425,11 +430,11 @@ function AIPricingBanner() {
 
 // ── Weather Card ──────────────────────────────────────────────
 function WeatherCard() {
-	const weather = mockWeatherSuggestion
+	const weather = weatherSuggestion
 
 	return (
 		<div className='flex items-start gap-3 px-4 py-3 bg-[var(--color-seller-accent-light)] rounded-[var(--radius-xl)] border border-[var(--color-seller-accent-muted)]'>
-			<span className='text-2xl flex-shrink-0 mt-0.5'>{weather.icon}</span>
+			<Sun size={24} className='flex-shrink-0 mt-0.5 text-[var(--color-seller-accent)]' />
 			<div className='min-w-0'>
 				<div className='flex items-center gap-2 mb-0.5'>
 					<p className='text-sm font-semibold text-[var(--color-seller-accent)]'>{weather.condition}</p>
@@ -445,24 +450,25 @@ function WeatherCard() {
 
 // ── Eco Impact Strip ──────────────────────────────────────────
 function EcoImpactStrip() {
+	const profile = useSellerStore((s) => s.profile)
 	const stats = [
 		{
 			icon: <Leaf size={14} />,
-			value: `${formatCompact(mockSellerProfile.totalFoodSavedKg)}kg`,
+			value: `${formatCompact(profile?.totalFoodSavedKg ?? 0)}kg`,
 			label: 'Food Saved',
 			color: 'text-[var(--color-success)]',
 			bg: 'bg-[var(--color-success-light)]',
 		},
 		{
 			icon: <Wind size={14} />,
-			value: `${formatCompact(mockSellerProfile.totalCo2PreventedKg)}kg`,
+			value: `${formatCompact(profile?.totalCo2PreventedKg ?? 0)}kg`,
 			label: 'CO₂ Prevented',
 			color: 'text-[var(--color-info)]',
 			bg: 'bg-[var(--color-info-light)]',
 		},
 		{
 			icon: <ShoppingBag size={14} />,
-			value: formatCompact(mockSellerProfile.totalMealsServed),
+			value: formatCompact(profile?.totalMealsServed ?? 0),
 			label: 'Meals Served',
 			color: 'text-[var(--color-seller-accent)]',
 			bg: 'bg-[var(--color-seller-accent-light)]',
@@ -588,8 +594,16 @@ function RecentActivity() {
 
 // ── Main Dashboard Page ───────────────────────────────────────
 export function SellerDashboardPage() {
-	const analytics = mockSellerAnalytics
-	const profile = mockSellerProfile
+	const analytics = useSellerStore((s) => s.analytics)
+	const profile = useSellerStore((s) => s.profile)
+
+	if (!analytics || !profile) {
+		return (
+			<div className='py-10 text-center text-sm text-[var(--color-seller-text-muted)]'>
+				Loading seller dashboard...
+			</div>
+		)
+	}
 
 	const todayRevenue = analytics.dailyRevenue[analytics.dailyRevenue.length - 1]?.revenue ?? 0
 	const todayOrders = analytics.dailyRevenue[analytics.dailyRevenue.length - 1]?.orders ?? 0

@@ -7,7 +7,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
 import { staggerContainer, slideUp, fadeIn } from '@/lib/motion'
 import { formatRelativeTime } from '@/lib/utils'
-import { mockSellerReviews, mockSellerProfile } from '@/data/seller-mock'
+import { sellerApi } from '@/lib/api'
+import { useSellerStore } from '@/stores/seller-store'
 import { cn } from '@/lib/utils'
 import type { SellerReview } from '@/types'
 
@@ -50,15 +51,22 @@ function RatingBar({ star, count, total }: { star: number; count: number; total:
 
 // ── Review Card ──────────────────────────────────────────────
 function ReviewCard({ review }: { review: SellerReview }) {
+	const refreshReviews = useSellerStore((s) => s.refreshReviews)
 	const [replyOpen, setReplyOpen] = useState(false)
 	const [replyText, setReplyText] = useState('')
 	const [submitted, setSubmitted] = useState(false)
 
-	function handleSubmitReply() {
+	async function handleSubmitReply() {
 		if (replyText.trim().length < 3) return
-		setSubmitted(true)
-		setReplyOpen(false)
-		setReplyText('')
+		try {
+			await sellerApi.replyReview(review.id, replyText.trim())
+			await refreshReviews()
+			setSubmitted(true)
+			setReplyOpen(false)
+			setReplyText('')
+		} catch {
+			setSubmitted(false)
+		}
 	}
 
 	const hasReply = !!review.sellerReply || submitted
@@ -184,8 +192,12 @@ function ReviewCard({ review }: { review: SellerReview }) {
 
 // ── Main Page ─────────────────────────────────────────────────
 export function SellerReviewsPage() {
-	const reviews = mockSellerReviews
-	const profile = mockSellerProfile
+	const reviews = useSellerStore((s) => s.reviews)
+	const profile = useSellerStore((s) => s.profile)
+
+	if (!profile) {
+		return <div className='py-10 text-center text-sm text-[var(--color-seller-text-muted)]'>Loading reviews...</div>
+	}
 
 	// Compute distribution
 	const distribution = [5, 4, 3, 2, 1].map((star) => ({

@@ -21,7 +21,19 @@ import {
 	Heart,
 	Weight,
 	Loader2,
+	Landmark,
+	Home,
+	Utensils,
+	Baby,
+	PersonStanding,
+	AlertOctagon,
+	BookOpen,
+	HeartHandshake,
+	Bike,
+	Car,
+	Navigation,
 } from 'lucide-react'
+import type React from 'react'
 import { cn } from '@/lib/utils'
 import { useNGOUIStore } from '@/stores/ngo-ui-store'
 import { profileApi } from '@/lib/api'
@@ -54,23 +66,23 @@ interface OnboardingForm {
 	// Step 4 — Preview (no inputs)
 }
 
-const CATEGORIES = [
-	{ value: 'food_bank', label: 'Food Bank', icon: '🏦' },
-	{ value: 'shelter', label: 'Shelter', icon: '🏠' },
-	{ value: 'community_kitchen', label: 'Community Kitchen', icon: '🍲' },
-	{ value: 'orphanage', label: 'Orphanage', icon: '👶' },
-	{ value: 'old_age_home', label: 'Old Age Home', icon: '🧓' },
-	{ value: 'disaster_relief', label: 'Disaster Relief', icon: '🆘' },
-	{ value: 'educational', label: 'Educational', icon: '📚' },
-	{ value: 'other', label: 'Other', icon: '🤝' },
+const CATEGORIES: { value: string; label: string; icon: React.ReactNode }[] = [
+	{ value: 'food_bank', label: 'Food Bank', icon: <Landmark size={20} /> },
+	{ value: 'shelter', label: 'Shelter', icon: <Home size={20} /> },
+	{ value: 'community_kitchen', label: 'Community Kitchen', icon: <Utensils size={20} /> },
+	{ value: 'orphanage', label: 'Orphanage', icon: <Baby size={20} /> },
+	{ value: 'old_age_home', label: 'Old Age Home', icon: <PersonStanding size={20} /> },
+	{ value: 'disaster_relief', label: 'Disaster Relief', icon: <AlertOctagon size={20} /> },
+	{ value: 'educational', label: 'Educational', icon: <BookOpen size={20} /> },
+	{ value: 'other', label: 'Other', icon: <HeartHandshake size={20} /> },
 ]
 
-const VEHICLE_TYPES = [
-	{ value: 'bicycle', label: 'Bicycle', icon: '🚲' },
-	{ value: 'two_wheeler', label: 'Two Wheeler', icon: '🛵' },
-	{ value: 'auto', label: 'Auto', icon: '🛺' },
-	{ value: 'van', label: 'Van', icon: '🚐' },
-	{ value: 'truck', label: 'Truck', icon: '🚛' },
+const VEHICLE_TYPES: { value: string; label: string; icon: React.ReactNode }[] = [
+	{ value: 'bicycle', label: 'Bicycle', icon: <Bike size={20} /> },
+	{ value: 'two_wheeler', label: 'Two Wheeler', icon: <Bike size={20} /> },
+	{ value: 'auto', label: 'Auto', icon: <Navigation size={20} /> },
+	{ value: 'van', label: 'Van', icon: <Car size={20} /> },
+	{ value: 'truck', label: 'Truck', icon: <Truck size={20} /> },
 ]
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -240,7 +252,7 @@ function Step1({ form, update }: { form: OnboardingForm; update: (k: keyof Onboa
 									: 'border-[var(--color-ngo-border)] text-[var(--color-ngo-text-secondary)] hover:border-[var(--color-ngo-accent)] hover:bg-[var(--color-ngo-accent-light)]',
 							)}
 						>
-							<span className='text-xl'>{c.icon}</span>
+							<span className='flex items-center justify-center'>{c.icon}</span>
 							{c.label}
 						</button>
 					))}
@@ -383,7 +395,7 @@ function Step2({
 									: 'border-[var(--color-ngo-border)] text-[var(--color-ngo-text-secondary)] hover:border-[var(--color-ngo-accent)] hover:bg-[var(--color-ngo-accent-light)]',
 							)}
 						>
-							<span className='text-xl'>{v.icon}</span>
+							<span className='flex items-center justify-center'>{v.icon}</span>
 							{v.label}
 						</button>
 					))}
@@ -482,11 +494,11 @@ function Step4({ form }: { form: OnboardingForm }) {
 			<div className='rounded-[var(--radius-xl)] border border-[var(--color-ngo-border)] overflow-hidden bg-white'>
 				{/* Cover */}
 				<div className='h-24 bg-gradient-to-br from-[var(--color-ngo-secondary)] to-[var(--color-ngo-accent-muted)] flex items-center justify-center'>
-					<span className='text-4xl'>{cat?.icon ?? '🤝'}</span>
+					<span className='flex items-center justify-center text-white'>{cat?.icon ?? <HeartHandshake size={36} />}</span>
 				</div>
 				<div className='p-4 -mt-6 relative'>
-					<div className='w-14 h-14 rounded-full bg-white border-2 border-[var(--color-ngo-border)] flex items-center justify-center text-2xl shadow-sm mb-3'>
-						{cat?.icon ?? '🤝'}
+					<div className='w-14 h-14 rounded-full bg-white border-2 border-[var(--color-ngo-border)] flex items-center justify-center shadow-sm mb-3'>
+						{cat?.icon ?? <HeartHandshake size={22} />}
 					</div>
 					<h2 className='text-lg font-bold font-[var(--font-display)] text-[var(--color-ngo-text-primary)]'>
 						{form.orgName || 'Your Organisation'}
@@ -514,8 +526,8 @@ function Step4({ form }: { form: OnboardingForm }) {
 						</div>
 					)}
 					{form.pickupCapacityKg && vehicle && (
-						<div className='flex items-center gap-1 mt-1'>
-							<span className='text-xs'>{vehicle.icon}</span>
+					<div className='flex items-center gap-1 mt-1'>
+						<span className='flex items-center'>{vehicle.icon}</span>
 							<span className='text-xs text-[var(--color-ngo-text-muted)]'>
 								{vehicle.label} · up to {form.pickupCapacityKg} kg/day
 							</span>

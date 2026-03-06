@@ -1,11 +1,14 @@
-import { ShieldCheck, BadgeCheck, Phone, Mail, MapPin, Building2 } from 'lucide-react'
+import { ShieldCheck, BadgeCheck, Phone, Mail, MapPin, Building2, LogOut } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { useInspectorStore } from '@/stores/inspector-store'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/hooks/useAuth'
 
 export function InspectorProfilePage() {
 	const { profile } = useInspectorStore()
+	const { logout } = useAuth()
 
 	return (
 		<div className='space-y-4 px-4 md:px-6 pt-6 pb-8 max-w-5xl mx-auto'>
@@ -63,6 +66,22 @@ export function InspectorProfilePage() {
 					</CardContent>
 				</Card>
 			</div>
+
+			<Card className='border-[var(--color-inspector-border)] bg-[var(--color-inspector-surface)] shadow-none'>
+				<CardContent className='p-4 flex items-start justify-between gap-3'>
+					<div>
+						<h3 className='text-sm font-bold font-[var(--font-display)] text-[var(--color-inspector-text-primary)]'>Sign Out</h3>
+						<p className='text-xs text-[var(--color-inspector-text-muted)] mt-1'>Sign out of this inspector account on this device.</p>
+					</div>
+					<Button
+						onClick={() => logout()}
+						className='h-8 px-3 rounded-full text-xs bg-[var(--color-inspector-accent)] hover:bg-[var(--color-inspector-accent)]/90'
+					>
+						<LogOut className='w-3.5 h-3.5 mr-1' />
+						Sign Out
+					</Button>
+				</CardContent>
+			</Card>
 		</div>
 	)
 }

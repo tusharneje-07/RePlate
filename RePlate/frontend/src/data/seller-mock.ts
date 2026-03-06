@@ -579,7 +579,7 @@ export const mockSellerReviews: SellerReview[] = [
 		rating: 5,
 		comment: 'Best croissants in Bandra! Always fresh and worth every rupee. Will order again!',
 		createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
-		sellerReply: 'Thank you so much Meera! Your support means the world to us. See you soon! 🥐',
+		sellerReply: 'Thank you so much Meera! Your support means the world to us. See you soon!',
 		sellerRepliedAt: new Date(Date.now() - 1 * 3600000).toISOString(),
 	},
 	{
@@ -617,7 +617,7 @@ export const mockSellerReviews: SellerReview[] = [
 		comment:
 			'Obsessed with the banana bread. The walnut pieces are the perfect touch. My morning coffee companion!',
 		createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
-		sellerReply: "Thank you Sneha! We'll keep that walnut-banana ratio going just for you 😄",
+		sellerReply: "Thank you Sneha! We'll keep that walnut-banana ratio going just for you",
 		sellerRepliedAt: new Date(Date.now() - 3 * 86400000 + 3600000).toISOString(),
 	},
 	{
@@ -672,5 +672,5 @@ export const mockWeatherSuggestion: WeatherSuggestion = {
 	recommendation:
 		"Hot day — consider listing chilled items like cold beverages or lighter pastries. Reduce prep of heavy baked goods by 15% compared to yesterday's batch.",
 	affectedListings: ['sl1', 'sl2'],
-	icon: '☀️',
+	icon: 'sun',
 }

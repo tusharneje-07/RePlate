@@ -28,7 +28,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { staggerContainer, fadeIn, slideUp } from '@/lib/motion'
-import { mockSellerProfile } from '@/data/seller-mock'
+import { useSellerStore } from '@/stores/seller-store'
 import { cn } from '@/lib/utils'
 
 // ── Local state type ─────────────────────────────────────────
@@ -193,8 +193,12 @@ function InfoBanner({ children }: { children: React.ReactNode }) {
 
 // ── Main Component ───────────────────────────────────────────
 export function SellerSettingsPage() {
-	const profile = mockSellerProfile
+	const profile = useSellerStore((s) => s.profile)
 	const { logout, deleteAccount } = useAuth()
+
+	if (!profile) {
+		return <div className='py-10 text-center text-sm text-[var(--color-seller-text-muted)]'>Loading settings...</div>
+	}
 
 	// Store open/closed toggle
 	const [isStoreOpen, setIsStoreOpen] = useState(profile.isOpen)

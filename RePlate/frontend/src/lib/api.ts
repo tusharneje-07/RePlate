@@ -64,6 +64,23 @@ export function isTokenExpired(token: string): boolean {
 	return Date.now() / 1000 > payload.exp
 }
 
+// ── File upload ───────────────────────────────────────────────
+/**
+ * Upload a single file to the backend.
+ * Returns the absolute public URL of the stored file.
+ *
+ * Accepted types: image/jpeg, image/png, image/webp, image/gif, application/pdf
+ * Max size: 10 MB (enforced server-side; a 413 will be thrown for larger files)
+ */
+export async function uploadFile(file: File): Promise<string> {
+	const form = new FormData()
+	form.append('file', file)
+	const response = await api.post<{ url: string }>('/uploads', form, {
+		headers: { 'Content-Type': 'multipart/form-data' },
+	})
+	return response.data.url
+}
+
 // ── Auth API ──────────────────────────────────────────────────
 export interface AuthorizeResponse {
 	authorization_url: string
@@ -122,15 +139,45 @@ export interface ConsumerProfilePayload {
 }
 
 export interface SellerProfilePayload {
+	// Core identity
 	business_name?: string | null
 	business_type?: string | null
+	license_number?: string | null
 	phone_number?: string | null
+	// Address
 	address_line1?: string | null
 	city?: string | null
 	state?: string | null
 	postal_code?: string | null
 	country?: string | null
 	description?: string | null
+	// Media
+	logo_url?: string | null
+	cover_image_url?: string | null
+	// Geo coordinates
+	lat?: number | null
+	lng?: number | null
+	// Operating hours
+	open_time?: string | null
+	close_time?: string | null
+	/** JSON array string, e.g. '["Sunday","Monday"]' */
+	closed_days?: string | null
+	// Compliance
+	gst_number?: string | null
+	fssai_certificate_url?: string | null
+	bank_statement_url?: string | null
+	// Bank / payout
+	bank_account?: string | null
+	ifsc?: string | null
+}
+
+export interface SellerProfileOut extends SellerProfilePayload {
+	id: string
+	user_id: string
+	is_verified: boolean
+	completion_status: string
+	created_at: string
+	updated_at: string
 }
 
 export interface NGOProfilePayload {
@@ -150,8 +197,8 @@ export const profileApi = {
 	getConsumerProfile: () => api.get<ConsumerProfilePayload & { id: string; completion_status: string }>('/profiles/consumer/me'),
 	updateConsumerProfile: (data: ConsumerProfilePayload) => api.patch('/profiles/consumer/me', data),
 
-	getSellerProfile: () => api.get<SellerProfilePayload & { id: string; completion_status: string }>('/profiles/seller/me'),
-	updateSellerProfile: (data: SellerProfilePayload) => api.patch('/profiles/seller/me', data),
+	getSellerProfile: () => api.get<SellerProfileOut>('/profiles/seller/me'),
+	updateSellerProfile: (data: SellerProfilePayload) => api.patch<SellerProfileOut>('/profiles/seller/me', data),
 
 	getNGOProfile: () => api.get<NGOProfilePayload & { id: string; completion_status: string }>('/profiles/ngo/me'),
 	updateNGOProfile: (data: NGOProfilePayload) => api.patch('/profiles/ngo/me', data),
@@ -200,6 +247,9 @@ export interface ListingFilters {
 	min_discount?: number
 	query?: string
 	sort_by?: string
+	lat?: number
+	lng?: number
+	radius_km?: number
 	limit?: number
 	offset?: number
 }
@@ -323,6 +373,154 @@ export interface ImpactStatsOut {
 export const impactApi = {
 	getMyImpact: () =>
 		api.get<ImpactStatsOut>('/impact/me'),
+}
+
+// ── Seller Module API ─────────────────────────────────────────
+
+export interface SellerListingOut {
+	id: string
+	name: string
+	description: string
+	images: string[]
+	category: string
+	dietary_tags: string[]
+	allergens: string[]
+	original_price: number
+	discounted_price: number
+	discount_percent: number
+	total_quantity: number
+	quantity_available: number
+	quantity_sold: number
+	unit: string
+	pickup_start: string | null
+	pickup_end: string | null
+	expires_at: string | null
+	status: string
+	co2_saved_per_unit: number
+	views: number
+	add_to_cart_count: number
+	conversion_rate: number
+	expiry_rate: number
+	created_at: string
+	updated_at: string
+}
+
+export interface SellerOrderOut {
+	id: string
+	order_number: string
+	status: string
+	customer: {
+		id: string | null
+		name: string
+		avatar: string | null
+		phone: string | null
+		total_orders_with_seller: number
+	}
+	items: Array<{
+		listing_id: string | null
+		listing_name: string
+		quantity: number
+		unit_price: number
+		subtotal: number
+		image: string | null
+	}>
+	total_amount: number
+	total_items: number
+	pickup_time: string | null
+	pickup_window_end: string | null
+	qr_code: string | null
+	placed_at: string
+	updated_at: string
+	cancel_reason: string | null
+}
+
+export interface SellerNotificationOut {
+	id: string
+	type: string
+	title: string
+	message: string
+	is_read: boolean
+	created_at: string
+	action_url: string | null
+	metadata: {
+		order_id?: string | null
+		listing_id?: string | null
+	}
+}
+
+export interface SellerAnalyticsOut {
+	total_revenue: number
+	total_orders: number
+	avg_order_value: number
+	total_customers: number
+	revenue_change: number
+	orders_change: number
+	customers_change: number
+	total_food_saved_kg: number
+	total_co2_prevented_kg: number
+	total_meals_served: number
+	daily_revenue: Array<{ day: string; revenue: number; orders: number }>
+	weekly_revenue: Array<{ week: string; revenue: number; orders: number }>
+	order_breakdown: {
+		pending: number
+		confirmed: number
+		preparing: number
+		ready: number
+		completed: number
+		cancelled: number
+	}
+	top_listings: Array<{
+		listing_id: string
+		name: string
+		image: string | null
+		units_sold: number
+		revenue: number
+		rating: number
+	}>
+	category_split: Array<{ category: string; percent: number; revenue: number }>
+	rating: number
+	review_count: number
+	listing_count: number
+}
+
+export interface SellerReviewOut {
+	id: string
+	order_id: string | null
+	customer_id: string | null
+	customer_name: string
+	customer_avatar: string | null
+	listing_name: string
+	rating: number
+	comment: string | null
+	created_at: string
+	seller_reply: string | null
+	seller_replied_at: string | null
+}
+
+export const sellerApi = {
+	listListings: () => api.get<SellerListingOut[]>('/seller/listings'),
+	createListing: (data: Record<string, unknown>) => api.post<SellerListingOut>('/seller/listings', data),
+	updateListing: (listingId: string, data: Record<string, unknown>) => api.patch<SellerListingOut>(`/seller/listings/${listingId}`, data),
+	deleteListing: (listingId: string) => api.delete(`/seller/listings/${listingId}`),
+
+	listOrders: (params?: { status?: string; limit?: number; offset?: number }) => api.get<SellerOrderOut[]>('/seller/orders', { params }),
+	getOrderById: (orderId: string) => api.get<SellerOrderOut>(`/seller/orders/${orderId}`),
+	updateOrderStatus: (orderId: string, data: { status: string; cancel_reason?: string }) =>
+		api.patch<SellerOrderOut>(`/seller/orders/${orderId}/status`, data),
+
+	getAnalytics: () => api.get<SellerAnalyticsOut>('/seller/analytics'),
+
+	listNotifications: (params?: { unread_only?: boolean; event_type?: string; limit?: number; offset?: number }) =>
+		api.get<{ notifications: SellerNotificationOut[]; unread_count: number }>('/seller/notifications', { params }),
+	markNotificationRead: (notificationId: string) =>
+		api.post<{ notification: SellerNotificationOut; unread_count: number }>(`/seller/notifications/${notificationId}/read`),
+	markAllNotificationsRead: () =>
+		api.post<{ updated_count: number; unread_count: number }>('/seller/notifications/mark-all-read'),
+
+	listReviews: (params?: { rating?: number; limit?: number; offset?: number }) =>
+		api.get<{ rating: number; review_count: number; reviews: SellerReviewOut[] }>('/seller/reviews', { params }),
+	replyReview: (reviewId: string, message: string) =>
+		api.post<{ id: string; seller_reply: string; seller_replied_at: string }>(`/seller/reviews/${reviewId}/reply`, { message }),
 }
 
 // ── Auth me update ────────────────────────────────────────────

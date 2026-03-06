@@ -5,7 +5,6 @@ import {
 	Bell,
 	MapPin,
 	Shield,
-	Trash2,
 	LogOut,
 	ChevronRight,
 	Moon,
@@ -28,6 +27,7 @@ import { Separator } from '@/components/ui/separator'
 import { staggerContainer, slideUp } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 import { profileApi } from '@/lib/api'
+import { useLocationStore } from '@/stores/location-store'
 import type { DietaryTag } from '@/types'
 
 // ── Toggle component ─────────────────────────────────────
@@ -90,7 +90,7 @@ export function SettingsPage() {
 	const [dietary, setDietary] = useState<DietaryTag[]>([])
 	// Allergens & radius (local only — no backend column yet)
 	const [allergens, setAllergens] = useState<string[]>([])
-	const [radius, setRadius] = useState(5000)
+	const { discoveryRadiusMeters, setDiscoveryRadiusMeters } = useLocationStore()
 
 	const [isSaving, setIsSaving] = useState(false)
 	const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle')
@@ -250,7 +250,7 @@ export function SettingsPage() {
 								<p className='text-sm font-medium text-[var(--color-text-primary)]'>Discovery Radius</p>
 							</div>
 							<Badge variant='secondary' className='font-mono text-xs'>
-								{(radius / 1000).toFixed(1)} km
+								{(discoveryRadiusMeters / 1000).toFixed(1)} km
 							</Badge>
 						</div>
 						<input
@@ -258,8 +258,8 @@ export function SettingsPage() {
 							min={500}
 							max={10000}
 							step={500}
-							value={radius}
-							onChange={(e) => setRadius(Number(e.target.value))}
+							value={discoveryRadiusMeters}
+							onChange={(e) => setDiscoveryRadiusMeters(Number(e.target.value))}
 							className='w-full accent-[var(--color-brand-accent)] h-2 rounded-full bg-[var(--color-border-subtle)] cursor-pointer'
 						/>
 						<div className='flex justify-between text-[10px] text-[var(--color-text-muted)] mt-1'>
@@ -324,7 +324,7 @@ export function SettingsPage() {
 					{isSaving
 						? <><Loader2 size={16} className='animate-spin mr-2' />Saving…</>
 						: saveStatus === 'saved'
-							? 'Preferences Saved ✓'
+							? 'Preferences Saved'
 							: saveStatus === 'error'
 								? 'Save Failed — Retry'
 								: 'Save Preferences'
@@ -337,22 +337,10 @@ export function SettingsPage() {
 				)}
 			</motion.div>
 
-			{/* Danger zone */}
+			{/* Sign out */}
 			<motion.div variants={slideUp}>
-				<Section title='Danger Zone'>
+				<Section title='Account'>
 					<div>
-						<button
-							type='button'
-							className='w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[var(--color-error-light)] transition-colors text-left'
-						>
-							<Trash2 size={15} className='text-[var(--color-error)] flex-shrink-0' />
-							<div className='flex-1'>
-								<p className='text-sm font-medium text-[var(--color-error)]'>Delete Account</p>
-								<p className='text-xs text-[var(--color-text-muted)]'>Permanently remove your data</p>
-							</div>
-							<ChevronRight size={14} className='text-[var(--color-text-muted)]' />
-						</button>
-						<Separator />
 						<button
 							type='button'
 							onClick={() => logout()}

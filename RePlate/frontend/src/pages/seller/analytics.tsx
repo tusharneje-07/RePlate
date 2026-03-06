@@ -19,7 +19,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
 import { staggerContainer, slideUp, fadeIn } from '@/lib/motion'
 import { formatCurrency } from '@/lib/utils'
-import { mockSellerAnalytics, mockSellerProfile } from '@/data/seller-mock'
+import { useSellerStore } from '@/stores/seller-store'
 import { cn } from '@/lib/utils'
 
 // ── Types ────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ function CategoryRow({ category, percent, revenue }: { category: string; percent
 }
 
 // ── Order Status Donut (CSS only) ────────────────────────────
-function OrderStatusChart({ breakdown }: { breakdown: typeof mockSellerAnalytics.orderBreakdown }) {
+function OrderStatusChart({ breakdown }: { breakdown: { completed: number; pending: number; confirmed: number; preparing: number; ready: number; cancelled: number } }) {
 	const total = Object.values(breakdown).reduce((s, v) => s + v, 0)
 	const statuses = [
 		{ label: 'Completed', count: breakdown.completed, color: '#2d8a4e' },
@@ -193,8 +193,13 @@ function OrderStatusChart({ breakdown }: { breakdown: typeof mockSellerAnalytics
 
 // ── Main Page ────────────────────────────────────────────────
 export function SellerAnalyticsPage() {
-	const analytics = mockSellerAnalytics
+	const analytics = useSellerStore((s) => s.analytics)
+	const profile = useSellerStore((s) => s.profile)
 	const [period, setPeriod] = useState<Period>('daily')
+
+	if (!analytics) {
+		return <div className='py-10 text-center text-sm text-[var(--color-seller-text-muted)]'>Loading analytics...</div>
+	}
 
 	const chartData =
 		period === 'daily'
@@ -218,7 +223,7 @@ export function SellerAnalyticsPage() {
 						Analytics
 					</h1>
 					<p className='text-sm text-[var(--color-seller-text-muted)] mt-0.5'>
-						{mockSellerProfile.name} — all-time overview
+						{profile?.name ?? 'Your store'} - all-time overview
 					</p>
 				</div>
 				<div className='flex items-center gap-1.5 bg-[var(--color-seller-accent-muted)] rounded-full p-0.5'>

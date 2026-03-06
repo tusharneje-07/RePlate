@@ -13,6 +13,7 @@ import {
 	Edit2,
 	CheckCircle2,
 	ChevronRight,
+	LogOut,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { staggerContainer, slideUp, fadeIn } from '@/lib/motion'
 import { useNGOStore } from '@/stores/ngo-store'
+import { useAuth } from '@/hooks/useAuth'
 
 const CATEGORY_LABELS: Record<string, string> = {
 	food_bank: 'Food Bank',
@@ -55,6 +57,7 @@ function InfoRow({ label, value, icon }: { label: string; value: string; icon: R
 
 export function NGOProfilePage() {
 	const { profile } = useNGOStore()
+	const { logout } = useAuth()
 	const [activeTab, setActiveTab] = useState<'overview' | 'operations' | 'documents'>('overview')
 
 	if (!profile) {
@@ -117,7 +120,7 @@ export function NGOProfilePage() {
 					{[
 						{ label: 'Pickups', value: profile.totalPickupsCompleted.toLocaleString() },
 						{ label: 'Meals', value: `${(profile.totalMealsServed / 1000).toFixed(0)}K` },
-						{ label: 'Rating', value: `${profile.rating} ★` },
+						{ label: 'Rating', value: String(profile.rating) },
 					].map((s) => (
 						<div key={s.label} className='text-center py-3 bg-white'>
 							<p className='text-base font-bold font-[var(--font-display)] text-[var(--color-ngo-accent)]'>
@@ -195,11 +198,12 @@ export function NGOProfilePage() {
 									<div className='flex flex-wrap gap-2'>
 										{profile.serviceAreas.map((area) => (
 											<Badge
-												key={area}
-												className='bg-[var(--color-ngo-eco-muted)] text-[var(--color-ngo-text-secondary)] border-[var(--color-ngo-border)] text-xs font-medium hover:bg-[var(--color-ngo-eco-muted)]'
-											>
-												📍 {area}
-											</Badge>
+											key={area}
+											className='bg-[var(--color-ngo-eco-muted)] text-[var(--color-ngo-text-secondary)] border-[var(--color-ngo-border)] text-xs font-medium hover:bg-[var(--color-ngo-eco-muted)] flex items-center gap-1'
+										>
+											<MapPin size={11} />
+											{area}
+										</Badge>
 										))}
 									</div>
 								</motion.div>
@@ -304,6 +308,22 @@ export function NGOProfilePage() {
 								</motion.div>
 							</>
 						)}
+					</motion.div>
+
+					<motion.div variants={slideUp}>
+						<div className='bg-white rounded-[var(--radius-xl)] border border-[var(--color-ngo-border)] p-4 flex items-start justify-between gap-3'>
+							<div>
+								<p className='text-sm font-bold text-[var(--color-ngo-text-primary)]'>Sign Out</p>
+								<p className='text-xs text-[var(--color-ngo-text-muted)] mt-1'>Sign out of this NGO account on this device.</p>
+							</div>
+							<Button
+								onClick={() => logout()}
+								className='h-8 px-3 text-xs rounded-full bg-[var(--color-ngo-accent)] hover:bg-[var(--color-ngo-accent)]/90 text-white'
+							>
+								<LogOut size={12} className='mr-1' />
+								Sign Out
+							</Button>
+						</div>
 					</motion.div>
 				</div>
 			</div>

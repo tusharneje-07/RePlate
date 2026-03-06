@@ -16,6 +16,7 @@ import {
 	Truck,
 	LineChart,
 	Building2,
+	Sun,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -292,7 +293,7 @@ function WeatherCard() {
 
 	return (
 		<div className='flex items-start gap-3 px-4 py-3 bg-[var(--color-ngo-accent-light)] rounded-[var(--radius-xl)] border border-[var(--color-ngo-border)]'>
-			<span className='text-2xl flex-shrink-0 mt-0.5'>☀️</span>
+			<Sun size={24} className='flex-shrink-0 mt-0.5 text-[var(--color-ngo-accent)]' />
 			<div className='min-w-0'>
 				<div className='flex items-center gap-2 mb-0.5'>
 					<p className='text-sm font-semibold text-[var(--color-ngo-accent)]'>Sunny</p>

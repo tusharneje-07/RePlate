@@ -4,7 +4,6 @@ import { motion } from 'motion/react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { useSellerUIStore } from '@/stores/seller-ui-store'
 import { useSellerStore } from '@/stores/seller-store'
-import { mockSellerProfile } from '@/data/seller-mock'
 
 interface SellerNavbarProps {
 	title?: string
@@ -12,8 +11,9 @@ interface SellerNavbarProps {
 
 export function SellerNavbar({ title }: SellerNavbarProps) {
 	const { toggleSidebar } = useSellerUIStore()
-	const { unreadCount } = useSellerStore()
+	const { unreadCount, profile } = useSellerStore()
 	const location = useLocation()
+	const ownerName = profile?.ownerName ?? 'Seller'
 
 	// Derive page title from path if not provided
 	const pageTitle =
@@ -88,11 +88,11 @@ export function SellerNavbar({ title }: SellerNavbarProps) {
 					{/* Avatar → Profile */}
 					<Link to='/seller/profile'>
 						<Avatar className='w-8 h-8 cursor-pointer ring-2 ring-transparent hover:ring-[var(--color-seller-accent)] transition-all'>
-							<AvatarImage src={mockSellerProfile.logo} alt={mockSellerProfile.ownerName} />
+							<AvatarImage src={profile?.logo} alt={ownerName} />
 							<AvatarFallback
 								className='bg-[var(--color-seller-secondary)] text-[var(--color-seller-accent)] font-bold text-xs'
 							>
-								{mockSellerProfile.ownerName
+								{ownerName
 									.split(' ')
 									.map((n) => n[0])
 									.join('')}

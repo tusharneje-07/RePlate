@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'motion/react'
-import { Leaf, ArrowRight, Loader2, AlertCircle } from 'lucide-react'
+import { Leaf, ArrowRight, Loader2, AlertCircle, ShoppingBag, Store, HeartHandshake } from 'lucide-react'
 import { authApi } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -179,21 +179,21 @@ export function LoginPage() {
 					{/* Role hint cards */}
 					<div className='pt-2 space-y-2'>
 						<p className='text-[11px] uppercase tracking-widest text-[var(--color-text-disabled)] font-medium'>Who is RePlate for?</p>
-						<div className='grid grid-cols-3 gap-2'>
-							{[
-								{ label: 'Consumers', emoji: '🛒', color: 'var(--color-brand-accent-light)' },
-								{ label: 'Sellers', emoji: '🏪', color: 'var(--color-seller-accent-light)' },
-								{ label: 'NGOs', emoji: '🤝', color: 'var(--color-ngo-accent-light)' },
-							].map((r) => (
-								<div
-									key={r.label}
-									style={{ backgroundColor: r.color }}
-									className='flex flex-col items-center gap-1 py-2.5 rounded-[var(--radius-md)] text-center'
-								>
-									<span className='text-lg leading-none'>{r.emoji}</span>
-									<span className='text-[10px] font-medium text-[var(--color-text-secondary)]'>{r.label}</span>
-								</div>
-							))}
+					<div className='grid grid-cols-3 gap-2'>
+						{[
+							{ label: 'Consumers', icon: <ShoppingBag size={16} />, color: 'var(--color-brand-accent-light)' },
+							{ label: 'Sellers', icon: <Store size={16} />, color: 'var(--color-seller-accent-light)' },
+							{ label: 'NGOs', icon: <HeartHandshake size={16} />, color: 'var(--color-ngo-accent-light)' },
+						].map((r) => (
+							<div
+								key={r.label}
+								style={{ backgroundColor: r.color }}
+								className='flex flex-col items-center gap-1 py-2.5 rounded-[var(--radius-md)] text-center'
+							>
+								<span className='text-[var(--color-text-secondary)] leading-none'>{r.icon}</span>
+								<span className='text-[10px] font-medium text-[var(--color-text-secondary)]'>{r.label}</span>
+							</div>
+						))}
 						</div>
 					</div>
 				</motion.div>

@@ -1,9 +1,20 @@
 import { Outlet } from 'react-router-dom'
+import { useEffect } from 'react'
 import { SellerSidebar } from './seller-sidebar'
 import { SellerNavbar } from './seller-navbar'
 import { SellerMobileBottomNav } from './seller-mobile-bottom-nav'
+import { useSellerStore } from '@/stores/seller-store'
 
 export function SellerLayout() {
+	const hydrate = useSellerStore((s) => s.hydrate)
+	const hasHydrated = useSellerStore((s) => s.hasHydrated)
+
+	useEffect(() => {
+		if (!hasHydrated) {
+			void hydrate()
+		}
+	}, [hasHydrated, hydrate])
+
 	return (
 		<div className='flex min-h-screen bg-[var(--color-seller-bg)]'>
 			{/* Desktop Sidebar */}

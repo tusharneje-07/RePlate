@@ -23,6 +23,7 @@ import {
 	ScanLine,
 	RefreshCw,
 	Filter,
+	MessageSquare,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -432,7 +433,7 @@ function OrderCard({ order, onQRScan }: OrderCardProps) {
 					{/* Customer note */}
 					{order.customerNote && (
 						<div className='mb-2.5 px-2.5 py-2 bg-[var(--color-seller-surface-elevated)] rounded-[var(--radius-md)] text-xs text-[var(--color-seller-text-muted)] flex items-start gap-1.5'>
-							<span className='mt-0.5 flex-shrink-0'>💬</span>
+							<MessageSquare size={13} className='mt-0.5 flex-shrink-0 text-[var(--color-seller-text-muted)]' />
 							<span className='italic line-clamp-1'>{order.customerNote}</span>
 						</div>
 					)}
@@ -905,7 +906,7 @@ export function SellerOrderDetailPage() {
 							</div>
 							{order.customerNote && (
 								<div className='mt-3 px-3 py-2.5 bg-[var(--color-seller-surface-elevated)] rounded-[var(--radius-lg)] text-xs text-[var(--color-seller-text-secondary)] flex items-start gap-2'>
-									<span className='flex-shrink-0'>💬</span>
+									<MessageSquare size={13} className='flex-shrink-0 text-[var(--color-seller-text-muted)]' />
 									<span className='italic'>{order.customerNote}</span>
 								</div>
 							)}

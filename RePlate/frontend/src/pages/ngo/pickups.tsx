@@ -13,6 +13,7 @@ import {
 	QrCode,
 	Phone,
 	Navigation,
+	ClipboardList,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -127,9 +128,9 @@ export function NGOPickupsPage() {
 			<div className='flex-1 overflow-y-auto p-4 md:px-6 max-w-3xl mx-auto w-full'>
 				{sorted.length === 0 ? (
 					<div className='h-[40vh] flex flex-col items-center justify-center text-center px-4'>
-						<div className='w-16 h-16 rounded-full bg-[var(--color-ngo-surface-elevated)] flex items-center justify-center mb-3 text-3xl'>
-							📋
-						</div>
+					<div className='w-16 h-16 rounded-full bg-[var(--color-ngo-surface-elevated)] flex items-center justify-center mb-3'>
+						<ClipboardList size={28} className='text-[var(--color-ngo-text-muted)]' />
+					</div>
 						<p className='text-[var(--color-ngo-text-primary)] font-bold text-lg font-[var(--font-display)] mb-1'>
 							{activeTab === 'active' ? 'Queue is clear!' : 'No completed pickups yet'}
 						</p>

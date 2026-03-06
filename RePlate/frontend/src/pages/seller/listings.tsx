@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, type ChangeEvent } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import {
@@ -25,18 +25,42 @@ import {
 	Image as ImageIcon,
 	ChevronRight,
 	Info,
+	Upload,
+	Loader2,
+	Salad,
+	Sprout,
+	Drumstick,
+	Wheat,
+	Milk,
+	HandMetal,
+	Sun,
 } from 'lucide-react'
+import type React from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { slideUp, staggerContainer, fadeIn, scaleIn } from '@/lib/motion'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
+import { uploadFile } from '@/lib/api'
 import { useSellerStore } from '@/stores/seller-store'
 import { useSellerUIStore } from '@/stores/seller-ui-store'
-import { mockAIPricingSuggestions } from '@/data/seller-mock'
 import type { SellerListing, ListingStatus, DietaryTag, FoodCategory } from '@/types'
 import { cn } from '@/lib/utils'
+
+const aiPricingSuggestions: Array<{
+	listingId: string
+	currentPrice: number
+	suggestedPrice: number
+	suggestedDiscount?: number
+	reasoning: string
+	confidence?: number
+	demandLevel?: string
+	expiryUrgency?: string
+	weatherImpact?: string
+}> = []
+
+const MAX_IMAGE_UPLOADS = 3
 
 // ─────────────────────────────────────────────────────────────
 // Constants
@@ -51,13 +75,13 @@ const STATUS_TABS: { value: ListingStatus | 'all'; label: string }[] = [
 	{ value: 'expired', label: 'Expired' },
 ]
 
-const DIETARY_OPTIONS: { value: DietaryTag; label: string; emoji: string }[] = [
-	{ value: 'veg', label: 'Veg', emoji: '🟢' },
-	{ value: 'vegan', label: 'Vegan', emoji: '🌱' },
-	{ value: 'non-veg', label: 'Non-Veg', emoji: '🔴' },
-	{ value: 'gluten-free', label: 'Gluten-Free', emoji: '🌾' },
-	{ value: 'dairy-free', label: 'Dairy-Free', emoji: '🥛' },
-	{ value: 'jain', label: 'Jain', emoji: '☸️' },
+const DIETARY_OPTIONS: { value: DietaryTag; label: string; icon: React.ReactNode }[] = [
+	{ value: 'veg', label: 'Veg', icon: <Salad size={14} /> },
+	{ value: 'vegan', label: 'Vegan', icon: <Sprout size={14} /> },
+	{ value: 'non-veg', label: 'Non-Veg', icon: <Drumstick size={14} /> },
+	{ value: 'gluten-free', label: 'Gluten-Free', icon: <Wheat size={14} /> },
+	{ value: 'dairy-free', label: 'Dairy-Free', icon: <Milk size={14} /> },
+	{ value: 'jain', label: 'Jain', icon: <HandMetal size={14} /> },
 ]
 
 const ALLERGEN_OPTIONS = ['gluten', 'dairy', 'eggs', 'nuts', 'soy', 'fish', 'shellfish', 'sesame']
@@ -128,7 +152,7 @@ function emptyForm(): Omit<SellerListing, 'id' | 'views' | 'addToCartCount' | 'c
 	return {
 		name: '',
 		description: '',
-		images: [''],
+		images: [],
 		category: 'bakery',
 		dietaryTags: [],
 		allergens: [],
@@ -162,7 +186,7 @@ function ListingCard({ listing, onEdit }: ListingCardProps) {
 	const [confirmDelete, setConfirmDelete] = useState(false)
 
 	const cfg = STATUS_CONFIG[listing.status]
-	const hasAISuggestion = mockAIPricingSuggestions.some((s) => s.listingId === listing.id)
+	const hasAISuggestion = aiPricingSuggestions.some((s) => s.listingId === listing.id)
 	const soldPct =
 		listing.totalQuantity > 0
 			? Math.round((listing.quantitySold / listing.totalQuantity) * 100)
@@ -437,13 +461,17 @@ interface ListingFormSheetProps {
 function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps) {
 	const { addListing, updateListing } = useSellerStore()
 	const isEdit = !!editListing
+	const imageInputRef = useRef<HTMLInputElement>(null)
+	const [uploadSlot, setUploadSlot] = useState<number | null>(null)
+	const [isUploadingImage, setIsUploadingImage] = useState(false)
+	const [imageUploadError, setImageUploadError] = useState<string | null>(null)
 
 	const [form, setForm] = useState<FormData>(() =>
 		editListing
 			? {
 					name: editListing.name,
 					description: editListing.description,
-					images: editListing.images.length ? editListing.images : [''],
+					images: editListing.images,
 					category: editListing.category,
 					dietaryTags: editListing.dietaryTags,
 					allergens: editListing.allergens,
@@ -473,7 +501,7 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 				? {
 						name: editListing.name,
 						description: editListing.description,
-						images: editListing.images.length ? editListing.images : [''],
+						images: editListing.images,
 						category: editListing.category,
 						dietaryTags: editListing.dietaryTags,
 						allergens: editListing.allergens,
@@ -493,6 +521,45 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 					}
 				: emptyForm(),
 		)
+	}
+
+	const openFilePickerForSlot = (slotIndex: number) => {
+		setUploadSlot(slotIndex)
+		setImageUploadError(null)
+		imageInputRef.current?.click()
+	}
+
+	const handleImageSelected = async (e: ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0]
+		e.target.value = ''
+		if (!file || uploadSlot === null) return
+
+		setIsUploadingImage(true)
+		setImageUploadError(null)
+		try {
+			const uploadedUrl = await uploadFile(file)
+			setForm((prev) => {
+				const next = [...prev.images]
+				if (uploadSlot < next.length) {
+					next[uploadSlot] = uploadedUrl
+				} else if (next.length < MAX_IMAGE_UPLOADS) {
+					next.push(uploadedUrl)
+				}
+				return { ...prev, images: next }
+			})
+		} catch {
+			setImageUploadError('Image upload failed. Please try again.')
+		} finally {
+			setIsUploadingImage(false)
+			setUploadSlot(null)
+		}
+	}
+
+	const removeImage = (slotIndex: number) => {
+		setForm((prev) => ({
+			...prev,
+			images: prev.images.filter((_, i) => i !== slotIndex),
+		}))
 	}
 
 	const set = useCallback(<K extends keyof FormData>(key: K, value: FormData[K]) => {
@@ -666,60 +733,79 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 
 							<div className='h-px bg-[var(--color-seller-border-subtle)]' />
 
-							{/* ── Image URL ── */}
+							{/* ── Image Upload ── */}
 							<section>
 								<h3 className='text-sm font-bold text-[var(--color-seller-text-primary)] mb-3 flex items-center gap-2'>
 									<span className='w-5 h-5 rounded-full bg-[var(--color-seller-accent)] text-white text-[10px] font-bold flex items-center justify-center'>2</span>
-									Image
+									Upload Images
 								</h3>
-								<div className='space-y-2'>
-									{form.images.map((url, idx) => (
-										<div key={idx} className='flex gap-2'>
-											<Input
-												className={inputCls}
-												placeholder='https://images.unsplash.com/...'
-												value={url}
-												onChange={(e) => {
-													const next = [...form.images]
-													next[idx] = e.target.value
-													set('images', next)
+								<input
+									ref={imageInputRef}
+									type='file'
+									accept='image/*'
+									className='hidden'
+									onChange={(e) => {
+										void handleImageSelected(e)
+									}}
+								/>
+								<div className='grid grid-cols-3 gap-2'>
+									{Array.from({ length: Math.min(form.images.length + 1, MAX_IMAGE_UPLOADS) }).map((_, idx) => {
+										const url = form.images[idx]
+										const isCurrentSlotUploading = isUploadingImage && uploadSlot === idx
+										return (
+											<div
+												key={idx}
+												role='button'
+												tabIndex={0}
+												onClick={() => openFilePickerForSlot(idx)}
+												onKeyDown={(ev) => {
+													if (ev.key === 'Enter' || ev.key === ' ') {
+														ev.preventDefault()
+														openFilePickerForSlot(idx)
+													}
 												}}
-											/>
-											{form.images.length > 1 && (
-												<button
-													type='button'
-													onClick={() => set('images', form.images.filter((_, i) => i !== idx))}
-													className='p-2 text-[var(--color-error)] hover:bg-[var(--color-error-light)] rounded-[var(--radius-md)] transition-colors flex-shrink-0'
-												>
-													<X size={14} />
-												</button>
-											)}
-										</div>
-									))}
-									{form.images.length < 3 && (
-										<button
-											type='button'
-											onClick={() => set('images', [...form.images, ''])}
-											className='text-xs font-semibold text-[var(--color-seller-accent)] hover:underline flex items-center gap-1'
-										>
-											<Plus size={12} /> Add another image URL
-										</button>
-									)}
-									{/* Preview */}
-									{form.images[0] && (
-										<div className='mt-2 flex gap-2'>
-											{form.images.filter(Boolean).map((url, i) => (
-												<img
-													key={i}
-													src={url}
-													alt='preview'
-													className='w-16 h-16 rounded-[var(--radius-md)] object-cover border border-[var(--color-seller-border)]'
-													onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-												/>
-											))}
-										</div>
-									)}
+												className={cn(
+													'relative aspect-square rounded-[var(--radius-md)] border border-[var(--color-seller-border)] overflow-hidden',
+													'bg-[var(--color-seller-surface-card)] hover:border-[var(--color-seller-accent)] transition-colors',
+												)}
+											>
+												{url ? (
+													<img src={url} alt={`Image ${idx + 1}`} className='w-full h-full object-cover' />
+												) : (
+													<div className='w-full h-full flex flex-col items-center justify-center gap-1 text-[var(--color-seller-text-muted)]'>
+														{isCurrentSlotUploading ? <Loader2 size={16} className='animate-spin' /> : <Upload size={16} />}
+														<span className='text-[10px] font-medium'>Image {idx + 1}</span>
+													</div>
+												)}
+												{url && (
+													<div className='absolute inset-x-0 bottom-0 bg-black/55 text-white text-[10px] py-1 text-center'>
+														Click to replace
+													</div>
+												)}
+												{url && (
+													<div className='absolute top-1 right-1'>
+														<button
+															type='button'
+															onClick={(ev) => {
+																ev.stopPropagation()
+																removeImage(idx)
+															}}
+															className='w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/75'
+														>
+															<X size={12} />
+														</button>
+													</div>
+												)}
+											</div>
+										)
+									})}
 								</div>
+								<p className='text-[11px] text-[var(--color-seller-text-muted)] mt-2'>
+									Tap any image slot to upload. You can upload up to {MAX_IMAGE_UPLOADS} images.
+								</p>
+								{imageUploadError && (
+									<p className='text-[11px] text-[var(--color-error)] mt-1'>{imageUploadError}</p>
+								)}
 							</section>
 
 							<div className='h-px bg-[var(--color-seller-border-subtle)]' />
@@ -877,7 +963,7 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 															: 'bg-transparent text-[var(--color-seller-text-secondary)] border-[var(--color-seller-border)] hover:border-[var(--color-seller-accent)]',
 													)}
 												>
-													<span>{d.emoji}</span> {d.label}
+													<span>{d.icon}</span> {d.label}
 													{form.dietaryTags.includes(d.value) && <Check size={10} />}
 												</button>
 											))}
@@ -977,7 +1063,7 @@ function AIPricingSheet() {
 		useSellerUIStore()
 	const { listings, updateListing } = useSellerStore()
 
-	const suggestion = mockAIPricingSuggestions.find((s) => s.listingId === aiPricingListingId)
+	const suggestion = aiPricingSuggestions.find((s) => s.listingId === aiPricingListingId)
 	const listing = listings.find((l) => l.id === aiPricingListingId)
 
 	const [applied, setApplied] = useState(false)
@@ -1144,14 +1230,14 @@ function AIPricingSheet() {
 
 									{/* Demand & Urgency signals */}
 									<div className='flex gap-2'>
-										<div className={cn('flex-1 flex items-center gap-2 p-2.5 rounded-[var(--radius-md)]', demandColors[suggestion.demandLevel])}>
+									<div className={cn('flex-1 flex items-center gap-2 p-2.5 rounded-[var(--radius-md)]', demandColors[suggestion.demandLevel ?? 'medium'])}>
 											<TrendingUp size={13} />
 											<div>
 												<p className='text-[9px] font-medium opacity-70'>Demand</p>
 												<p className='text-xs font-bold capitalize'>{suggestion.demandLevel}</p>
 											</div>
 										</div>
-										<div className={cn('flex-1 flex items-center gap-2 p-2.5 rounded-[var(--radius-md)]', urgencyColors[suggestion.expiryUrgency])}>
+									<div className={cn('flex-1 flex items-center gap-2 p-2.5 rounded-[var(--radius-md)]', urgencyColors[suggestion.expiryUrgency ?? 'medium'])}>
 											<Clock size={13} />
 											<div>
 												<p className='text-[9px] font-medium opacity-70'>Expiry Urgency</p>
@@ -1173,7 +1259,7 @@ function AIPricingSheet() {
 									{/* Weather note */}
 									{suggestion.weatherImpact && (
 										<div className='flex items-start gap-2 p-3 bg-[var(--color-info-light)] rounded-[var(--radius-lg)]'>
-											<span className='text-base'>☀️</span>
+											<Sun size={16} className='flex-shrink-0 mt-0.5 text-[var(--color-info)]' />
 											<p className='text-xs text-[var(--color-info)] leading-relaxed'>
 												{suggestion.weatherImpact}
 											</p>
@@ -1181,12 +1267,12 @@ function AIPricingSheet() {
 									)}
 
 									{/* More suggestions row */}
-									{mockAIPricingSuggestions.length > 1 && (
+									{aiPricingSuggestions.length > 1 && (
 										<div className='p-3 bg-[var(--color-seller-surface-elevated)] rounded-[var(--radius-lg)]'>
 											<p className='text-xs font-semibold text-[var(--color-seller-text-primary)] mb-2'>
 												Other suggestions
 											</p>
-											{mockAIPricingSuggestions
+										{aiPricingSuggestions
 												.filter((s) => s.listingId !== aiPricingListingId)
 												.map((s) => {
 													const l = listings.find((x) => x.id === s.listingId)
@@ -1306,7 +1392,7 @@ export function SellerListingsPage() {
 		{},
 	)
 
-	const aiSuggestionCount = mockAIPricingSuggestions.length
+	const aiSuggestionCount = aiPricingSuggestions.length
 
 	return (
 		<>
@@ -1342,7 +1428,7 @@ export function SellerListingsPage() {
 							type='button'
 							onClick={() => {
 								const { setAiPricingListingId, setAiPricingOpen } = useSellerUIStore.getState()
-								setAiPricingListingId(mockAIPricingSuggestions[0].listingId)
+								setAiPricingListingId(aiPricingSuggestions[0].listingId)
 								setAiPricingOpen(true)
 							}}
 							className='w-full flex items-center gap-3 px-4 py-3 rounded-[var(--radius-xl)] border border-[var(--color-seller-accent-muted)] bg-[var(--color-seller-accent-light)] hover:shadow-md transition-shadow text-left'

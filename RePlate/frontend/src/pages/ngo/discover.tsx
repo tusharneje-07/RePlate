@@ -149,9 +149,9 @@ export function NGODiscoverPage() {
 				<div className='h-full overflow-y-auto p-4 md:px-6 max-w-7xl mx-auto'>
 					{sortedDonations.length === 0 ? (
 						<div className='h-[50vh] flex flex-col items-center justify-center text-center px-4'>
-							<div className='w-16 h-16 rounded-full bg-[var(--color-ngo-surface-elevated)] flex items-center justify-center mb-3 text-3xl'>
-								🔍
-							</div>
+						<div className='w-16 h-16 rounded-full bg-[var(--color-ngo-surface-elevated)] flex items-center justify-center mb-3'>
+							<Search size={28} className='text-[var(--color-ngo-text-muted)]' />
+						</div>
 							<p className='text-[var(--color-ngo-text-primary)] font-bold text-lg font-[var(--font-display)] mb-1'>
 								No donations found
 							</p>

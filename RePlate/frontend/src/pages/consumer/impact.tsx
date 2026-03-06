@@ -19,7 +19,7 @@ import { ImpactStatCard } from '@/components/common/impact-stat-card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { staggerContainer, slideUp } from '@/lib/motion'
-import { formatCurrency, cn } from '@/lib/utils'
+import { formatCurrency, cn, carKmEquivalent, treesEquivalent, ledHoursEquivalent } from '@/lib/utils'
 import { impactApi } from '@/lib/api'
 import { mapImpactStatsOut } from '@/lib/mappers'
 import type { ImpactLevel } from '@/types'
@@ -240,9 +240,9 @@ export function ImpactPage() {
 				</div>
 				<div className='grid grid-cols-3 gap-3'>
 					{[
-						{ icon: Car, value: `${Math.round(impact.totalCo2Saved * 4)} km`, label: 'not driven', color: 'text-[var(--color-text-muted)]' },
-						{ icon: TreePine, value: `${(impact.totalCo2Saved / 21).toFixed(1)}`, label: 'trees/year', color: 'text-[var(--color-eco)]' },
-						{ icon: Lightbulb, value: `${Math.round(impact.totalCo2Saved * 12)}h`, label: 'of LED light', color: 'text-amber-400' },
+						{ icon: Car, value: `${Math.round(carKmEquivalent(impact.totalCo2Saved))} km`, label: 'not driven', color: 'text-[var(--color-text-muted)]' },
+						{ icon: TreePine, value: `${treesEquivalent(impact.totalCo2Saved).toFixed(1)}`, label: 'trees/year', color: 'text-[var(--color-eco)]' },
+						{ icon: Lightbulb, value: `${Math.round(ledHoursEquivalent(impact.totalCo2Saved))}h`, label: 'of LED light', color: 'text-amber-400' },
 					].map((item) => (
 						<div
 							key={item.label}
