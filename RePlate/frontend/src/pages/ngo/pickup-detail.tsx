@@ -37,6 +37,7 @@ export function NGOPickupDetailPage() {
 	const [showScanner, setShowScanner] = useState(false)
 	const [scannedCode, setScannedCode] = useState('')
 	const [verifyError, setVerifyError] = useState('')
+	const [isCompleting, setIsCompleting] = useState(false)
 	
 	// Completion Flow State
 	const [showCompleteFlow, setShowCompleteFlow] = useState(false)
@@ -68,10 +69,15 @@ export function NGOPickupDetailPage() {
 		}
 	}
 
-	const handleComplete = () => {
-		completePickup(pickup.id, parseInt(mealsServed) || pickup.donation.servings, targetCommunity, redistributionNotes)
-		setShowCompleteFlow(false)
-		navigate('/ngo/pickups', { replace: true })
+	const handleComplete = async () => {
+		setIsCompleting(true)
+		try {
+			await completePickup(pickup.id, parseInt(mealsServed) || pickup.donation.servings, targetCommunity, redistributionNotes)
+			setShowCompleteFlow(false)
+			navigate('/ngo/pickups', { replace: true })
+		} finally {
+			setIsCompleting(false)
+		}
 	}
 
 	const handleCancel = () => {
@@ -413,23 +419,30 @@ export function NGOPickupDetailPage() {
 								</div>
 
 								<div className='pt-6 mt-6 border-t border-[var(--color-ngo-border-subtle)] space-y-3'>
-									<Button 
-										className='w-full bg-[var(--color-ngo-accent)] hover:bg-[var(--color-ngo-accent-hover)] text-white h-12 text-base font-bold rounded-xl shadow-lg shadow-[var(--color-ngo-accent)]/20'
-										onClick={handleComplete}
-									>
-										Complete & Save Impact
-									</Button>
-									<Button 
-										variant='ghost' 
-										className='w-full text-[var(--color-ngo-text-muted)] hover:bg-black/5 h-12 rounded-xl'
-										onClick={() => {
-											completePickup(pickup.id, parseInt(mealsServed) || pickup.donation.servings, 'Unspecified', '')
+								<Button 
+									className='w-full bg-[var(--color-ngo-accent)] hover:bg-[var(--color-ngo-accent-hover)] text-white h-12 text-base font-bold rounded-xl shadow-lg shadow-[var(--color-ngo-accent)]/20'
+									onClick={handleComplete}
+									disabled={isCompleting}
+								>
+									{isCompleting ? 'Saving...' : 'Complete & Save Impact'}
+								</Button>
+								<Button 
+									variant='ghost' 
+									className='w-full text-[var(--color-ngo-text-muted)] hover:bg-black/5 h-12 rounded-xl'
+									disabled={isCompleting}
+									onClick={async () => {
+										setIsCompleting(true)
+										try {
+											await completePickup(pickup.id, parseInt(mealsServed) || pickup.donation.servings, 'Unspecified', '')
 											setShowCompleteFlow(false)
 											navigate('/ngo/pickups', { replace: true })
-										}}
-									>
-										Skip for now (Save defaults)
-									</Button>
+										} finally {
+											setIsCompleting(false)
+										}
+									}}
+								>
+									Skip for now (Save defaults)
+								</Button>
 								</div>
 							</div>
 						</motion.div>

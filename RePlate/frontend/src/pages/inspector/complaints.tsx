@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { staggerContainer, slideUp } from '@/lib/motion'
 import { formatRelativeTime } from '@/lib/utils'
 import { useInspectorStore } from '@/stores/inspector-store'
+import { ComplaintTriagePanel } from '@/components/ai/ComplaintTriagePanel'
 
 function SeverityPill({ level }: { level: 'low' | 'medium' | 'high' | 'critical' }) {
 	const cls = {
@@ -107,6 +108,11 @@ export function InspectorComplaintsPage() {
 											</Link>
 										</Button>
 									</div>
+									<ComplaintTriagePanel
+										complaintText={item.description}
+										complaintType='hygiene'
+										complaintId={item.id}
+									/>
 								</CardContent>
 							</Card>
 						</motion.div>

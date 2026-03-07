@@ -1,3 +1,4 @@
+import React from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 import {
@@ -23,7 +24,6 @@ import { Button } from '@/components/ui/button'
 import { staggerContainer, slideUp, fadeIn } from '@/lib/motion'
 import { formatRelativeTime } from '@/lib/utils'
 import { useNGOStore } from '@/stores/ngo-store'
-import { mockNGOImpact, mockAISuggestions, mockNGOWeather } from '@/data/ngo-mock'
 import { cn } from '@/lib/utils'
 
 // ── Helper: format large numbers ────────────────────────────
@@ -246,71 +246,38 @@ function RecentDonations() {
 
 // ── AI Suggestions Banner ─────────────────────────────────────
 function AISuggestionsBanner() {
-	const suggestions = mockAISuggestions
-
-	if (suggestions.length === 0) return null
-
-	const topSuggestion = suggestions[0]
-
-	return (
-		<motion.div
-			variants={slideUp}
-			className='relative overflow-hidden rounded-[var(--radius-xl)] p-4'
-			style={{
-				background: 'linear-gradient(135deg, #009022 0%, #006b18 60%, #1a3a28 100%)',
-			}}
-		>
-			<div className='absolute -right-8 -top-8 w-32 h-32 rounded-full bg-white/10 pointer-events-none' />
-			<div className='absolute right-4 -bottom-4 w-20 h-20 rounded-full bg-white/5 pointer-events-none' />
-
-			<div className='relative flex items-start gap-3'>
-				<div className='w-9 h-9 rounded-[var(--radius-md)] bg-white/20 flex items-center justify-center flex-shrink-0'>
-					<Sparkles size={18} className='text-white' />
-				</div>
-				<div className='flex-1 min-w-0'>
-					<div className='flex items-center gap-2 mb-1'>
-						<p className='text-[10px] font-medium text-white/70'>AI Logistics Insight</p>
-					</div>
-					<h3 className='font-semibold text-sm text-white leading-snug'>
-						{topSuggestion.title}
-					</h3>
-					<p className='text-[11px] text-white/70 mt-1 line-clamp-2'>{topSuggestion.message}</p>
-					<Link
-						to='/ngo/pickups'
-						className='inline-flex items-center gap-1.5 mt-2.5 text-xs font-semibold bg-white/20 hover:bg-white/30 transition-colors px-3 py-1.5 rounded-full text-white'
-					>
-						Review Route <ChevronRight size={12} />
-					</Link>
-				</div>
-			</div>
-		</motion.div>
-	)
+	// TODO: Connect to real AI suggestions API
+	// For now, don't show anything if no suggestions
+	return null
 }
 
 // ── Weather Card ──────────────────────────────────────────────
 function WeatherCard() {
-	const weather = mockNGOWeather
-
-	return (
-		<div className='flex items-start gap-3 px-4 py-3 bg-[var(--color-ngo-accent-light)] rounded-[var(--radius-xl)] border border-[var(--color-ngo-border)]'>
-			<Sun size={24} className='flex-shrink-0 mt-0.5 text-[var(--color-ngo-accent)]' />
-			<div className='min-w-0'>
-				<div className='flex items-center gap-2 mb-0.5'>
-					<p className='text-sm font-semibold text-[var(--color-ngo-accent)]'>Sunny</p>
-					<span className='text-xs text-[var(--color-ngo-text-muted)]'>{weather.temperature}°C</span>
-				</div>
-				<p className='text-xs text-[var(--color-ngo-text-secondary)] leading-relaxed'>
-					{weather.recommendation}
-				</p>
-			</div>
-		</div>
-	)
+	// TODO: Connect to real weather API
+	// For now, don't show weather card
+	return null
 }
 
 // ── Main Dashboard Page ───────────────────────────────────────
 export function NGODashboardPage() {
-	const { profile } = useNGOStore()
-	const impact = mockNGOImpact
+	const { profile, pickups, initialize, isLoaded } = useNGOStore()
+	const activePickupsCount = pickups.filter(p => p.status !== 'completed' && p.status !== 'cancelled').length
+	
+	// Initialize data from API on mount
+	React.useEffect(() => {
+		initialize()
+	}, [initialize])
+
+	// Show loading state while data is being fetched
+	if (!isLoaded) {
+		return (
+			<div className='flex items-center justify-center min-h-[50vh]'>
+				<div className='text-center'>
+					<p className='text-[var(--color-ngo-text-muted)]'>Loading dashboard...</p>
+				</div>
+			</div>
+		)
+	}
 
 	return (
 		<motion.div
@@ -323,13 +290,8 @@ export function NGODashboardPage() {
 			<motion.div variants={slideUp} className='flex flex-col gap-1'>
 				<p className='text-sm text-[var(--color-ngo-text-muted)]'>{getGreeting()}</p>
 				<h1 className='text-2xl font-bold font-[var(--font-display)] text-[var(--color-ngo-text-primary)]'>
-					{profile.organizationName}
+					{profile.organizationName || 'Welcome'}
 				</h1>
-			</motion.div>
-
-			{/* ── Weather Card ── */}
-			<motion.div variants={slideUp}>
-				<WeatherCard />
 			</motion.div>
 
 			{/* ── Stat Cards (2×2 grid) ── */}
@@ -340,7 +302,7 @@ export function NGODashboardPage() {
 				<StatCard
 					icon={<Truck size={16} />}
 					label='Active Pickups'
-					value={String(impact.activePickups)}
+					value={String(activePickupsCount)}
 					iconBg='bg-[var(--color-warning-light)]'
 					iconColor='text-[var(--color-warning)]'
 				/>
@@ -368,9 +330,6 @@ export function NGODashboardPage() {
 					iconColor='text-[var(--color-info)]'
 				/>
 			</motion.div>
-
-			{/* ── AI Suggestions ── */}
-			<AISuggestionsBanner />
 
 			<div className='grid grid-cols-1 lg:grid-cols-2 gap-5'>
 				{/* ── Active Pickups ── */}

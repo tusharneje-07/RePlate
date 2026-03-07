@@ -106,6 +106,16 @@ export interface MeResponse {
 	created_at: string
 }
 
+export interface LocalLoginResponse {
+	access_token: string
+	token_type: string
+	user_id: string
+	email: string
+	role: 'CONSUMER' | 'SELLER' | 'NGO' | 'INSPECTOR' | 'ADMIN' | null
+	is_onboarded: boolean
+	requires_role_selection: boolean
+}
+
 export const authApi = {
 	getAuthorizeUrl: (screenHint?: 'sign-in' | 'sign-up', state?: string) =>
 		api.get<AuthorizeResponse>('/auth/authorize', {
@@ -114,6 +124,10 @@ export const authApi = {
 				...(state ? { state } : {}),
 			},
 		}),
+
+	/** SKIP_WORKOS: email + password login */
+	localLogin: (email: string, password: string) =>
+		api.post<LocalLoginResponse>('/auth/local/login', { email, password }),
 
 	assignRole: (role: 'CONSUMER' | 'SELLER' | 'NGO') =>
 		api.post<{ access_token: string; token_type: string }>('/auth/role', { role }),
@@ -254,12 +268,190 @@ export interface ListingFilters {
 	offset?: number
 }
 
+export interface FoodListingCreate {
+	title: string
+	description?: string | null
+	category: string
+	images?: string[]
+	original_price: number
+	discounted_price: number
+	discount_percent?: number
+	quantity_available?: number
+	quantity_unit?: string
+	dietary_tags?: string[]
+	allergens?: string[]
+	pickup_start?: string | null
+	pickup_end?: string | null
+	expires_at?: string | null
+	co2_saved_per_unit?: number | null
+	seller_name?: string | null
+	seller_address?: string | null
+	seller_logo_url?: string | null
+	seller_distance_km?: number | null
+	seller_rating?: number | null
+	seller_category?: string | null
+}
+
 export const listingsApi = {
 	browse: (params?: ListingFilters) =>
 		api.get<FoodListingOut[]>('/listings', { params }),
 
 	getById: (id: string) =>
 		api.get<FoodListingOut>(`/listings/${id}`),
+
+	create: (data: FoodListingCreate) =>
+		api.post<FoodListingOut>('/listings', data),
+}
+
+// ── NGO API ───────────────────────────────────────────────────
+
+export interface NGOProfileOut {
+	id: string
+	organization_name: string | null
+	registration_number: string | null
+	mission_statement: string | null
+	phone: string | null
+	email: string
+	address: string | null
+	city: string | null
+	state: string | null
+	postal_code: string | null
+	country: string
+	serving_capacity: number | null
+	logo_url: string | null
+	is_verified: boolean
+	completion_status: string
+	latitude: number | null
+	longitude: number | null
+	operating_radius_km: number | null
+	ngo_type: string | null
+	verification_status: string
+	document_url: string | null
+	contact_person_name: string | null
+	vehicle_type: string | null
+	open_time: string | null
+	close_time: string | null
+	closed_days: string[] | null
+}
+
+export interface DonationListingOut {
+	id: string
+	title: string
+	description: string | null
+	category: string
+	food_type: string
+	donor_role: string  // "seller" | "consumer"
+	quantity_available: number
+	quantity_unit: string
+	original_price: number
+	discounted_price: number
+	pickup_start: string | null
+	pickup_end: string | null
+	expires_at: string | null
+	seller_id: string
+	seller_name: string | null
+	seller_address: string | null
+	seller_logo_url: string | null
+	is_active: boolean
+	distance_from_ngo: number | null
+	images: string[] | null
+	tags: string[] | null
+	created_at: string
+}
+
+export interface DonationRequestOut {
+	id: string
+	ngo_id: string
+	listing_id: string
+	seller_id: string
+	requested_quantity: number
+	pickup_time: string | null
+	approval_status: string
+	created_at: string
+	updated_at: string
+	listing_title: string | null
+	listing_quantity_unit: string | null
+	listing_category: string | null
+	seller_name: string | null
+}
+
+export interface NGOPickupOut {
+	id: string
+	donation_request_id: string | null
+	seller_id: string
+	pickup_code: string
+	pickup_status: string
+	pickup_time: string | null
+	verification_method: string
+	created_at: string
+}
+
+export interface NGODashboardOut {
+	total_food_collected_kg: number
+	total_food_distributed_kg: number
+	total_pickups_completed: number
+	total_sellers_supported: number
+	total_beneficiaries_served: number
+	co2_reduction_total: number
+	landfill_waste_reduction_total: number
+	total_requests: number
+	approved_requests: number
+	pending_requests: number
+}
+
+export interface NGONotificationOut {
+	id: string
+	ngo_id: string
+	event_type: string
+	title: string
+	message: string
+	reference_id: string | null
+	is_read: boolean
+	created_at: string
+}
+
+export const ngoApi = {
+	// Profile
+	getProfile: () => api.get<NGOProfileOut>('/ngo-backend/profile'),
+	updateProfile: (data: Partial<NGOProfileOut>) => api.patch<NGOProfileOut>('/ngo-backend/profile', data),
+
+	// Discovery
+	browseDonations: (params?: {
+		city?: string
+		food_type?: string
+		category?: string
+		query?: string
+		min_quantity?: number
+		max_distance_km?: number
+		limit?: number
+		offset?: number
+	}) => api.get<{ success: boolean; data: DonationListingOut[]; pagination: { total: number; limit: number; offset: number } }>('/ngo-backend/discovery/donations', { params }),
+
+	// Donation requests
+	createDonationRequest: (data: { listing_id: string; requested_quantity: number; pickup_time?: string }) =>
+		api.post<DonationRequestOut>('/ngo-backend/donations/request', data),
+	listDonationRequests: (params?: { approval_status?: string; limit?: number; offset?: number }) =>
+		api.get<{ success: boolean; data: DonationRequestOut[]; pagination: { total: number; limit: number; offset: number } }>('/ngo-backend/donations/requests', { params }),
+	cancelDonationRequest: (requestId: string) =>
+		api.patch(`/ngo-backend/donations/requests/${requestId}/cancel`),
+
+	// Pickups
+	listPickups: (params?: { pickup_status?: string; limit?: number; offset?: number }) =>
+		api.get<{ success: boolean; data: NGOPickupOut[]; pagination: { total: number; limit: number; offset: number } }>('/ngo-backend/pickups', { params }),
+	completePickup: (pickupId: string) =>
+		api.post(`/ngo-backend/pickups/${pickupId}/complete`),
+
+	// Analytics
+	getDashboard: (range?: 'today' | 'weekly' | 'monthly' | 'yearly') =>
+		api.get<{ success: boolean; data: NGODashboardOut }>('/ngo-backend/analytics/dashboard', { params: { range: range ?? 'weekly' } }),
+
+	// Notifications
+	listNotifications: (params?: { unread_only?: boolean; limit?: number; offset?: number }) =>
+		api.get<{ success: boolean; data: NGONotificationOut[]; pagination: { total: number; limit: number; offset: number } }>('/ngo-backend/notifications', { params }),
+	markNotificationRead: (notificationId: string) =>
+		api.post(`/ngo-backend/notifications/${notificationId}/read`),
+	markAllNotificationsRead: () =>
+		api.post('/ngo-backend/notifications/mark-all-read'),
 }
 
 // ── Orders API ────────────────────────────────────────────────
@@ -315,6 +507,9 @@ export const ordersApi = {
 
 	getById: (id: string) =>
 		api.get<OrderOut>(`/orders/${id}`),
+
+	cancel: (id: string) =>
+		api.post<OrderOut>(`/orders/${id}/cancel`),
 }
 
 // ── Favorites API ─────────────────────────────────────────────
@@ -396,6 +591,7 @@ export interface SellerListingOut {
 	pickup_end: string | null
 	expires_at: string | null
 	status: string
+	moderation_status: string | null
 	co2_saved_per_unit: number
 	views: number
 	add_to_cart_count: number
@@ -497,6 +693,36 @@ export interface SellerReviewOut {
 	seller_replied_at: string | null
 }
 
+export interface AiPriceRequest {
+	food_name: string
+	food_type?: string | null
+	base_price: number
+	expires_at: string // ISO string
+	total_quantity: number
+}
+
+export interface AiPricingFactors {
+	category: string
+	category_source: string
+	expiry_discount: number
+	inventory_discount: number
+	urgency_discount: number
+	distance_discount: number
+	demand_adjustment: number
+	weather_adjustment: number
+	time_of_day_adjustment: number
+	ngo_priority: boolean
+	ngo_action: string | null
+	reprice_interval_minutes: number
+}
+
+export interface AiPriceResponse {
+	discounted_price: number
+	discount_percent: number
+	remaining_shelf_life_hours: number
+	pricing_factors: AiPricingFactors
+}
+
 export const sellerApi = {
 	listListings: () => api.get<SellerListingOut[]>('/seller/listings'),
 	createListing: (data: Record<string, unknown>) => api.post<SellerListingOut>('/seller/listings', data),
@@ -521,6 +747,14 @@ export const sellerApi = {
 		api.get<{ rating: number; review_count: number; reviews: SellerReviewOut[] }>('/seller/reviews', { params }),
 	replyReview: (reviewId: string, message: string) =>
 		api.post<{ id: string; seller_reply: string; seller_replied_at: string }>(`/seller/reviews/${reviewId}/reply`, { message }),
+
+	requestInspection: (listingId: string) =>
+		api.post<{ listing_id: string; moderation_status: string; message: string }>(`/seller/listings/${listingId}/request-inspection`),
+	getInspectionStatus: (listingId: string) =>
+		api.get<{ listing_id: string; moderation_status: string | null; seller_status: string }>(`/seller/listings/${listingId}/inspection-status`),
+
+	calculateAiPrice: (data: AiPriceRequest) =>
+		api.post<{ success: boolean; data: AiPriceResponse }>('/seller/ai-price', data),
 }
 
 // ── Auth me update ────────────────────────────────────────────
@@ -528,4 +762,209 @@ export const sellerApi = {
 export const userApi = {
 	updateMe: (data: { first_name?: string | null; last_name?: string | null }) =>
 		api.patch<MeResponse>('/auth/me', data),
+}
+
+// ── Consumer Surplus Donations API ────────────────────────────
+
+export interface SurplusDonationCreateIn {
+	title: string
+	description?: string | null
+	category: string
+	food_type?: string
+	dietary_tags?: string[]
+	quantity_kg: number
+	servings?: number | null
+	cooked_at?: string | null
+	pickup_start?: string | null
+	pickup_end?: string | null
+	expires_at?: string | null
+	pickup_address: string
+	storage_type?: string | null
+	packaging_condition?: string | null
+	images?: string[]
+}
+
+export interface SurplusDonationOut {
+	id: string
+	title: string
+	description: string | null
+	category: string
+	food_type: string
+	donor_role: string
+	quantity_available: number
+	quantity_unit: string
+	pickup_start: string | null
+	pickup_end: string | null
+	expires_at: string | null
+	seller_address: string | null
+	is_active: boolean
+	is_donation: boolean
+	created_at: string
+	images: string[] | null
+}
+
+export const consumerApi = {
+	createSurplusDonation: (data: SurplusDonationCreateIn) =>
+		api.post<{ success: boolean; data: SurplusDonationOut; message: string }>('/consumer/surplus-donations', data),
+
+	getMyDonations: (params?: { limit?: number; offset?: number }) =>
+		api.get<{ success: boolean; data: SurplusDonationOut[]; pagination: { total: number; limit: number; offset: number } }>('/consumer/surplus-donations', { params }),
+
+	getDonationById: (listingId: string) =>
+		api.get<{ success: boolean; data: SurplusDonationOut }>(`/consumer/surplus-donations/${listingId}`),
+}
+
+// ── AI Features API ───────────────────────────────────────────────────────────
+
+export interface AIPricingStrategy {
+	priority_level: string
+	recommended_discount: number
+	suggested_price: number
+	promotion_strategy: string[]
+	ngo_fallback: string
+	reasoning: string
+	original_price: number
+	current_price: number
+	hours_remaining: number
+	weather: { temperature: number; condition: string }
+	price_applied?: boolean
+}
+
+export interface AIPricingRequest {
+	lat?: number
+	lon?: number
+	auto_apply?: boolean
+}
+
+export interface NGOMatchResult {
+	listing_id: string
+	title: string
+	match_score: number
+	urgency: string
+	distance_km: number
+	expiry_hours: number
+	quantity_kg: number
+	seller_name: string
+	match_reason: string
+	pickup_priority: number
+}
+
+export interface NGOMatchResponse {
+	ngo: { org_name: string; ngo_type: string; city: string }
+	matches: NGOMatchResult[]
+	pickup_sequence: string[]
+	summary: string
+	ai_powered: boolean
+}
+
+export interface ComplaintTriageRequest {
+	complaint_text: string
+	complaint_type: 'food_quality' | 'hygiene' | 'misleading_info' | 'other'
+	listing_title?: string
+	seller_name?: string
+	previous_violations?: number
+}
+
+export interface ComplaintTriageResult {
+	severity_score: number
+	urgency: string
+	recommended_action: string
+	safety_signals: string[]
+	triage_summary: string
+	auto_suspend: boolean
+	ai_powered: boolean
+}
+
+export interface SafetyScore {
+	listing_id: string
+	title: string
+	safety_score: number
+	risk_level: string
+	risk_factors: string[]
+	recommendations: string[]
+	summary: string
+	expiry_hours_remaining: number
+	open_complaints: number
+	seller_violations: number
+	ai_powered: boolean
+}
+
+export interface FoodRecommendation {
+	listing_id: string
+	title: string
+	category: string
+	match_score: number
+	match_reason: string
+	price: number
+	discount_percent: number
+	seller_name: string
+	distance_km: number
+	tag: string
+}
+
+export interface RecommendationsResponse {
+	recommendations: FoodRecommendation[]
+	sustainability_tip: string
+	trending_picks: string[]
+	consumer_level: string
+	ai_powered: boolean
+}
+
+export interface WasteRiskAlert {
+	listing_id: string
+	title: string
+	category: string
+	quantity_remaining: number
+	expiry_hours: number
+	orders_today: number
+	current_price: number
+}
+
+export interface DemandForecastResponse {
+	peak_hours: string[]
+	optimal_listing_time: string
+	top_demand_categories: string[]
+	waste_risk_alerts: WasteRiskAlert[]
+	waste_risk_action: string
+	restock_recommendations: string[]
+	weekly_forecast: string
+	summary: string
+	total_orders_30d: number
+	ai_powered: boolean
+}
+
+export const aiApi = {
+	/** Seller: generate AI pricing strategy for a food listing */
+	getPricingStrategy: (foodId: string, body: AIPricingRequest = {}) =>
+		api.post<{ success: boolean; data: AIPricingStrategy }>(`/ai/pricing/${foodId}`, {
+			lat: body.lat ?? 19.076,
+			lon: body.lon ?? 72.877,
+			auto_apply: body.auto_apply ?? false,
+		}),
+
+	/** NGO: get AI-matched donation recommendations */
+	getNGOMatches: (radiusKm = 50) =>
+		api.get<{ success: boolean; data: NGOMatchResponse }>('/ai/ngo-match', {
+			params: { radius_km: radiusKm },
+		}),
+
+	/** Inspector/Admin: triage a food safety complaint */
+	triageComplaint: (body: ComplaintTriageRequest) =>
+		api.post<{ success: boolean; data: ComplaintTriageResult }>('/ai/safety/triage', body),
+
+	/** Any authenticated user: get safety score for a listing */
+	getSafetyScore: (listingId: string) =>
+		api.get<{ success: boolean; data: SafetyScore }>(`/ai/safety/score/${listingId}`),
+
+	/** Consumer: get personalised food recommendations */
+	getRecommendations: (params: { lat?: number; lon?: number; limit?: number } = {}) =>
+		api.get<{ success: boolean; data: RecommendationsResponse }>('/ai/recommendations', { params }),
+
+	/** Seller: get demand forecast and waste alerts */
+	getDemandForecast: () =>
+		api.get<{ success: boolean; data: DemandForecastResponse }>('/ai/forecast'),
+
+	/** Any authenticated user: check AI system health */
+	getHealth: () =>
+		api.get<{ success: boolean; data: { groq_configured: boolean; model: string; agents: string[] } }>('/ai/health'),
 }

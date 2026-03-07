@@ -1,4 +1,5 @@
-import { QrCode, CheckCircle2, Clock } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
+import { CheckCircle2, Clock, QrCode } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import type { Order } from '@/types'
 
@@ -8,6 +9,7 @@ interface PickupQRCodeProps {
 
 export function PickupQRCode({ order }: PickupQRCodeProps) {
 	const isReady = order.status === 'ready_for_pickup'
+	const hasQrCode = !!order.qrCode
 
 	return (
 		<div className='flex flex-col items-center gap-4 p-5 bg-[var(--color-surface-card)] rounded-[var(--radius-xl)] border border-[var(--color-border)] shadow-[var(--shadow-card)]'>
@@ -19,44 +21,40 @@ export function PickupQRCode({ order }: PickupQRCodeProps) {
 			) : (
 				<Badge variant='muted' className='gap-1.5 text-sm px-3 py-1'>
 					<Clock size={14} />
-					Not ready yet
+					Not ready yet — QR ready to scan
 				</Badge>
 			)}
 
-			{/* QR Code placeholder */}
+			{/* QR Code */}
 			<div
-				className={`relative w-52 h-52 rounded-[var(--radius-lg)] overflow-hidden flex items-center justify-center ${
+				className={`relative w-52 h-52 rounded-[var(--radius-lg)] overflow-hidden flex items-center justify-center bg-white ${
 					isReady
 						? 'border-2 border-[var(--color-brand-accent)]'
 						: 'border-2 border-dashed border-[var(--color-border)]'
 				}`}
 			>
-				{isReady ? (
-					<>
-						{/* Simulated QR pattern */}
-						<div className='absolute inset-0 bg-white p-4'>
-							<div className='w-full h-full relative'>
-								<QrCode className='w-full h-full text-[var(--color-text-primary)]' strokeWidth={1} />
-							</div>
-						</div>
-						{/* Corner markers */}
-						<div className='absolute top-3 left-3 w-10 h-10 border-2 border-[var(--color-text-primary)] rounded-[4px]' />
-						<div className='absolute top-3 right-3 w-10 h-10 border-2 border-[var(--color-text-primary)] rounded-[4px]' />
-						<div className='absolute bottom-3 left-3 w-10 h-10 border-2 border-[var(--color-text-primary)] rounded-[4px]' />
-					</>
+				{hasQrCode ? (
+					<QRCodeSVG
+						value={order.qrCode!}
+						size={184}
+						level='M'
+						includeMargin={false}
+						fgColor='#111111'
+						bgColor='#ffffff'
+					/>
 				) : (
 					<div className='text-center px-4'>
 						<QrCode size={48} className='text-[var(--color-border)] mx-auto mb-2' />
-						<p className='text-xs text-[var(--color-text-muted)]'>QR code will appear when your order is ready</p>
+						<p className='text-xs text-[var(--color-text-muted)]'>QR code not available</p>
 					</div>
 				)}
 			</div>
 
 			{/* Order code */}
-			{isReady && order.qrCode && (
+			{hasQrCode && (
 				<div className='text-center'>
 					<p className='text-xs text-[var(--color-text-muted)] mb-1'>Order Code</p>
-					<p className='font-mono font-bold text-base text-[var(--color-text-primary)] tracking-widest'>
+					<p className='font-mono font-bold text-sm text-[var(--color-text-primary)] tracking-widest'>
 						{order.qrCode}
 					</p>
 				</div>

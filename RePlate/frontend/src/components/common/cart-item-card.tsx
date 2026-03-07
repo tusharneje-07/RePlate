@@ -12,16 +12,18 @@ interface CartItemProps {
 export function CartItemCard({ item }: CartItemProps) {
 	const { updateQuantity, removeItem } = useCartStore()
 
-	const pickupEnd = new Date(item.foodItem.pickupEnd)
+	const pickupEnd = item.foodItem.pickupEnd ? new Date(item.foodItem.pickupEnd) : null
 	const now = new Date()
-	const minsLeft = Math.floor((pickupEnd.getTime() - now.getTime()) / 60000)
-	const hoursLeft = Math.floor(minsLeft / 60)
+	const minsLeft = pickupEnd ? Math.floor((pickupEnd.getTime() - now.getTime()) / 60000) : null
+	const hoursLeft = minsLeft !== null ? Math.floor(minsLeft / 60) : null
 	const timeLabel =
-		minsLeft < 0
-			? 'Expired'
-			: minsLeft < 60
-				? `${minsLeft}m left`
-				: `${hoursLeft}h ${minsLeft % 60}m left`
+		minsLeft === null
+			? 'See store hours'
+			: minsLeft < 0
+				? 'Expired'
+				: minsLeft < 60
+					? `${minsLeft}m left`
+					: `${hoursLeft}h ${minsLeft % 60}m left`
 
 	return (
 		<motion.div

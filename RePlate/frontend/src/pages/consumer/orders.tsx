@@ -10,6 +10,7 @@ import { ordersApi } from '@/lib/api'
 import { mapOrderOutToOrder } from '@/lib/mappers'
 import { cn } from '@/lib/utils'
 import type { OrderStatus } from '@/types'
+import { useAuth } from '@/hooks/useAuth'
 
 type FilterTab = 'all' | 'active' | 'completed' | 'cancelled'
 
@@ -24,6 +25,7 @@ const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'confirmed', 'preparing', 're
 
 export function OrdersPage() {
 	const [tab, setTab] = useState<FilterTab>('all')
+	const { isLoading: authLoading, isAuthenticated } = useAuth()
 
 	const { data: rawOrders = [], isLoading } = useQuery({
 		queryKey: ['orders'],
@@ -31,6 +33,10 @@ export function OrdersPage() {
 			const { data } = await ordersApi.list()
 			return data.map(mapOrderOutToOrder)
 		},
+		// Don't fire until auth has resolved — prevents a 401 on first mount
+		// that would cache an empty result before the token is confirmed present.
+		enabled: !authLoading && isAuthenticated,
+		refetchInterval: 30_000,
 	})
 
 	const filtered = rawOrders.filter((o) => {
@@ -119,13 +125,18 @@ export function OrdersPage() {
 					</Button>
 				</motion.div>
 			) : (
-				<motion.div variants={staggerContainer} className='grid grid-cols-1 lg:grid-cols-3 gap-3'>
-					{filtered.map((order) => (
-						<motion.div key={order.id} variants={slideUp}>
+				<div className='grid grid-cols-1 lg:grid-cols-3 gap-3'>
+					{filtered.map((order, i) => (
+						<motion.div
+							key={order.id}
+							initial={{ opacity: 0, y: 16 }}
+							animate={{ opacity: 1, y: 0 }}
+							transition={{ duration: 0.25, ease: 'easeOut', delay: i * 0.07 }}
+						>
 							<OrderCard order={order} />
 						</motion.div>
 					))}
-				</motion.div>
+				</div>
 			)}
 		</motion.div>
 	)

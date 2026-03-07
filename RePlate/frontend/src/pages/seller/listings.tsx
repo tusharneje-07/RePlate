@@ -34,6 +34,8 @@ import {
 	Milk,
 	HandMetal,
 	Sun,
+	ShieldCheck,
+	Bot,
 } from 'lucide-react'
 import type React from 'react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -42,7 +44,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { slideUp, staggerContainer, fadeIn, scaleIn } from '@/lib/motion'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
-import { uploadFile } from '@/lib/api'
+import { uploadFile, sellerApi } from '@/lib/api'
+import type { AiPriceResponse } from '@/lib/api'
 import { useSellerStore } from '@/stores/seller-store'
 import { useSellerUIStore } from '@/stores/seller-ui-store'
 import type { SellerListing, ListingStatus, DietaryTag, FoodCategory } from '@/types'
@@ -143,7 +146,7 @@ const STATUS_CONFIG: Record<
 // ─────────────────────────────────────────────────────────────
 // Empty form state builder
 // ─────────────────────────────────────────────────────────────
-function emptyForm(): Omit<SellerListing, 'id' | 'views' | 'addToCartCount' | 'conversionRate' | 'expiryRate' | 'createdAt' | 'updatedAt' | 'quantitySold'> {
+function emptyForm(): Omit<SellerListing, 'id' | 'views' | 'addToCartCount' | 'conversionRate' | 'expiryRate' | 'createdAt' | 'updatedAt' | 'quantitySold' | 'moderationStatus'> {
 	const now = new Date()
 	const pickupStart = new Date(now.getTime() + 1 * 3600000)
 	const pickupEnd = new Date(now.getTime() + 5 * 3600000)
@@ -162,7 +165,6 @@ function emptyForm(): Omit<SellerListing, 'id' | 'views' | 'addToCartCount' | 'c
 		totalQuantity: 1,
 		quantityAvailable: 1,
 		unit: 'item',
-		prepTimeMinutes: 0,
 		pickupStart: pickupStart.toISOString().slice(0, 16),
 		pickupEnd: pickupEnd.toISOString().slice(0, 16),
 		expiresAt: expiresAt.toISOString().slice(0, 16),
@@ -180,10 +182,11 @@ interface ListingCardProps {
 }
 
 function ListingCard({ listing, onEdit }: ListingCardProps) {
-	const { deleteListing, pauseListing } = useSellerStore()
+	const { deleteListing, pauseListing, requestInspection } = useSellerStore()
 	const { setAiPricingListingId, setAiPricingOpen } = useSellerUIStore()
 	const [menuOpen, setMenuOpen] = useState(false)
 	const [confirmDelete, setConfirmDelete] = useState(false)
+	const [isRequestingInspection, setIsRequestingInspection] = useState(false)
 
 	const cfg = STATUS_CONFIG[listing.status]
 	const hasAISuggestion = aiPricingSuggestions.some((s) => s.listingId === listing.id)
@@ -224,18 +227,40 @@ function ListingCard({ listing, onEdit }: ListingCardProps) {
 									<ImageIcon size={20} className='text-[var(--color-seller-text-muted)]' />
 								</div>
 							)}
-							{/* Status dot */}
-							<div className='absolute top-2 left-2'>
+						{/* Status dot */}
+						<div className='absolute top-2 left-2'>
+							<span
+								className={cn(
+									'text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/60',
+									cfg.bg,
+									cfg.color,
+								)}
+							>
+								{cfg.label}
+							</span>
+						</div>
+						{/* Inspection badge */}
+						{listing.moderationStatus && (
+							<div className='absolute top-2 right-2'>
 								<span
 									className={cn(
-										'text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/60',
-										cfg.bg,
-										cfg.color,
+										'text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/60 flex items-center gap-0.5',
+										listing.moderationStatus === 'approved'
+											? 'bg-[var(--color-success-light)] text-[var(--color-success)] border-[var(--color-success)]/40'
+											: listing.moderationStatus === 'rejected'
+												? 'bg-[var(--color-error-light)] text-[var(--color-error)] border-[var(--color-error)]/40'
+												: 'bg-[var(--color-warning-light)] text-[var(--color-warning)] border-[var(--color-warning)]/40',
 									)}
 								>
-									{cfg.label}
+									<ShieldCheck size={8} />
+									{listing.moderationStatus === 'approved'
+										? 'Approved'
+										: listing.moderationStatus === 'rejected'
+											? 'Rejected'
+											: 'In Review'}
 								</span>
 							</div>
+						)}
 							{/* AI badge */}
 							{hasAISuggestion && (
 								<div className='absolute bottom-2 left-2'>
@@ -291,17 +316,32 @@ function ListingCard({ listing, onEdit }: ListingCardProps) {
 												>
 													<Pencil size={13} /> Edit listing
 												</button>
+											<button
+												type='button'
+												onClick={() => { pauseListing(listing.id); setMenuOpen(false) }}
+												className='w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[var(--color-seller-text-primary)] hover:bg-[var(--color-seller-surface-elevated)] transition-colors'
+											>
+												{listing.status === 'paused' ? (
+													<><PlayCircle size={13} /> Unpause</>
+												) : (
+													<><PauseCircle size={13} /> Pause</>
+												)}
+											</button>
+											{!listing.moderationStatus || listing.moderationStatus === 'rejected' ? (
 												<button
 													type='button'
-													onClick={() => { pauseListing(listing.id); setMenuOpen(false) }}
-													className='w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[var(--color-seller-text-primary)] hover:bg-[var(--color-seller-surface-elevated)] transition-colors'
+													disabled={isRequestingInspection}
+													onClick={async () => {
+														setIsRequestingInspection(true)
+														try { await requestInspection(listing.id) } finally { setIsRequestingInspection(false) }
+														setMenuOpen(false)
+													}}
+													className='w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[var(--color-info)] hover:bg-[var(--color-info-light)] transition-colors disabled:opacity-50'
 												>
-													{listing.status === 'paused' ? (
-														<><PlayCircle size={13} /> Unpause</>
-													) : (
-														<><PauseCircle size={13} /> Pause</>
-													)}
+													{isRequestingInspection ? <Loader2 size={13} className='animate-spin' /> : <ShieldCheck size={13} />}
+													Request Inspection
 												</button>
+											) : null}
 												{hasAISuggestion && (
 													<button
 														type='button'
@@ -450,13 +490,14 @@ function ListingCard({ listing, onEdit }: ListingCardProps) {
 // ─────────────────────────────────────────────────────────────
 // Listing Form Sheet (Create / Edit)
 // ─────────────────────────────────────────────────────────────
-type FormData = ReturnType<typeof emptyForm>
 
 interface ListingFormSheetProps {
 	open: boolean
 	editListing: SellerListing | null
 	onClose: () => void
 }
+
+type FormData = ReturnType<typeof emptyForm>
 
 function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps) {
 	const { addListing, updateListing } = useSellerStore()
@@ -465,6 +506,11 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 	const [uploadSlot, setUploadSlot] = useState<number | null>(null)
 	const [isUploadingImage, setIsUploadingImage] = useState(false)
 	const [imageUploadError, setImageUploadError] = useState<string | null>(null)
+	const [aiResult, setAiResult] = useState<AiPriceResponse | null>(null)
+	const [isCalculatingPrice, setIsCalculatingPrice] = useState(false)
+	const [aiPriceError, setAiPriceError] = useState<string | null>(null)
+	const [isSaving, setIsSaving] = useState(false)
+	const [saveError, setSaveError] = useState<string | null>(null)
 
 	const [form, setForm] = useState<FormData>(() =>
 		editListing
@@ -482,7 +528,6 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 					quantityAvailable: editListing.quantityAvailable,
 					unit: editListing.unit,
 					weight: editListing.weight,
-					prepTimeMinutes: editListing.prepTimeMinutes,
 					pickupStart: editListing.pickupStart.slice(0, 16),
 					pickupEnd: editListing.pickupEnd.slice(0, 16),
 					expiresAt: editListing.expiresAt.slice(0, 16),
@@ -572,8 +617,29 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 					Math.round(((next.originalPrice - next.discountedPrice) / next.originalPrice) * 100),
 				)
 			}
+			// Auto-calc co2SavedPerUnit from weight × 2.5
+			if (key === 'weight') {
+				const w = typeof value === 'number' ? value : 0
+				next.co2SavedPerUnit = w > 0 ? Math.round(w * 2.5 * 100) / 100 : 0
+			}
+			// Reset discounted price when original price changes so form is not valid with stale AI price
+			if (key === 'originalPrice') {
+				next.discountedPrice = 0
+				next.discountPercent = 0
+			}
 			return next
 		})
+		// Reset AI result if any pricing-relevant field changes
+		if (
+			key === 'originalPrice' ||
+			key === 'expiresAt' ||
+			key === 'totalQuantity' ||
+			key === 'name' ||
+			key === 'category'
+		) {
+			setAiResult(null)
+			setAiPriceError(null)
+		}
 	}, [])
 
 	const toggleDietary = (tag: DietaryTag) => {
@@ -594,32 +660,76 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 		}))
 	}
 
-	const handleSave = (publishNow = false) => {
+	const handleSave = async (publishNow = false) => {
+		setSaveError(null)
+		setIsSaving(true)
+		// In edit mode, weight cannot be changed — use existing listing weight for CO₂ calc
+		const weight = form.weight ?? (isEdit ? (editListing?.weight ?? 0) : 0)
+		const co2SavedPerUnit = weight > 0 ? Math.round(weight * 2.5 * 100) / 100 : 0
 		const payload = {
 			...form,
+			co2SavedPerUnit,
 			status: publishNow ? ('active' as const) : form.status,
 			images: form.images.filter(Boolean),
 		}
 
-		if (isEdit && editListing) {
-			updateListing(editListing.id, payload)
-		} else {
-			addListing({
-				...payload,
-				id: `sl-${Date.now()}`,
-				quantitySold: 0,
-				views: 0,
-				addToCartCount: 0,
-				conversionRate: 0,
-				expiryRate: 0,
-				createdAt: new Date().toISOString(),
-				updatedAt: new Date().toISOString(),
-			})
+		try {
+			if (isEdit && editListing) {
+				await updateListing(editListing.id, payload)
+			} else {
+				await addListing(payload)
+			}
+			onClose()
+		} catch (err) {
+			setSaveError(err instanceof Error ? err.message : 'Failed to save listing. Please try again.')
+		} finally {
+			setIsSaving(false)
 		}
-		onClose()
 	}
 
-	const isValid = form.name.trim().length > 0 && form.originalPrice > 0 && form.discountedPrice > 0
+	const handleCalculatePrice = async () => {
+		if (!form.name.trim() || !form.originalPrice || !form.expiresAt || !form.totalQuantity) return
+		setIsCalculatingPrice(true)
+		setAiPriceError(null)
+		// Clear previous result and reset discounted price so UI doesn't show stale data during load
+		setAiResult(null)
+		setForm((f) => ({ ...f, discountedPrice: 0, discountPercent: 0 }))
+		try {
+			const res = await sellerApi.calculateAiPrice({
+				food_name: form.name.trim(),
+				food_type: form.category ?? null,
+				base_price: form.originalPrice,
+				expires_at: new Date(form.expiresAt).toISOString(),
+				total_quantity: form.totalQuantity,
+			})
+			const envelope = res.data
+			if (envelope.success && envelope.data) {
+				setAiResult(envelope.data)
+				setForm((f) => ({
+					...f,
+					discountedPrice: envelope.data!.discounted_price,
+					discountPercent: Math.round(envelope.data!.discount_percent),
+				}))
+			} else {
+				setAiPriceError('No data returned from pricing agent.')
+			}
+		} catch (err: unknown) {
+			const msg = err instanceof Error ? err.message : 'Pricing agent unavailable.'
+			setAiPriceError(msg)
+		} finally {
+			setIsCalculatingPrice(false)
+		}
+	}
+
+	const canCalculate =
+		form.name.trim().length > 0 &&
+		form.originalPrice > 0 &&
+		form.expiresAt.length > 0 &&
+		form.totalQuantity > 0
+
+	const isValid = isEdit
+		? form.quantityAvailable >= 0
+		: canCalculate && form.discountedPrice > 0
 
 	const inputCls =
 		'border-[var(--color-seller-border)] bg-[var(--color-seller-surface-card)] focus:border-[var(--color-seller-accent)] focus:ring-[var(--color-seller-accent)]/20 text-[var(--color-seller-text-primary)] placeholder:text-[var(--color-seller-text-disabled)]'
@@ -675,6 +785,12 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 									<span className='w-5 h-5 rounded-full bg-[var(--color-seller-accent)] text-white text-[10px] font-bold flex items-center justify-center'>1</span>
 									Basic Information
 								</h3>
+								{isEdit && (
+									<div className='mb-3 flex items-center gap-1.5 px-3 py-2 rounded-[var(--radius-md)] bg-[var(--color-warning-light)] text-[var(--color-warning)] text-xs font-medium'>
+										<Info size={12} />
+										In edit mode, only quantity can be updated.
+									</div>
+								)}
 								<div className='space-y-3'>
 									<div>
 										<label className={labelCls}>Item Name *</label>
@@ -683,6 +799,7 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 											placeholder='e.g. Sourdough Loaf, Pastry Box'
 											value={form.name}
 											onChange={(e) => set('name', e.target.value)}
+											disabled={isEdit}
 										/>
 									</div>
 									<div>
@@ -692,9 +809,11 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 											placeholder='Describe freshness, ingredients, serving size...'
 											value={form.description}
 											onChange={(e) => set('description', e.target.value)}
+											disabled={isEdit}
 											className={cn(
 												'flex w-full rounded-[var(--radius-md)] border px-3 py-2 text-sm resize-none',
 												'focus:outline-none focus:ring-2 transition-colors duration-150',
+												isEdit ? 'opacity-50 cursor-not-allowed' : '',
 												inputCls,
 											)}
 										/>
@@ -705,9 +824,11 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 											<select
 												value={form.category}
 												onChange={(e) => set('category', e.target.value as FoodCategory)}
+												disabled={isEdit}
 												className={cn(
 													'flex h-10 w-full rounded-[var(--radius-md)] border px-3 py-2 text-sm appearance-none cursor-pointer',
 													'focus:outline-none focus:ring-2 transition-colors duration-150',
+													isEdit ? 'opacity-50 cursor-not-allowed' : '',
 													inputCls,
 												)}
 											>
@@ -725,6 +846,7 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 												placeholder='e.g. loaf, box, kg'
 												value={form.unit}
 												onChange={(e) => set('unit', e.target.value)}
+												disabled={isEdit}
 											/>
 										</div>
 									</div>
@@ -748,7 +870,7 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 										void handleImageSelected(e)
 									}}
 								/>
-								<div className='grid grid-cols-3 gap-2'>
+								<div className={cn('grid grid-cols-3 gap-2', isEdit && 'opacity-50 pointer-events-none')}>
 									{Array.from({ length: Math.min(form.images.length + 1, MAX_IMAGE_UPLOADS) }).map((_, idx) => {
 										const url = form.images[idx]
 										const isCurrentSlotUploading = isUploadingImage && uploadSlot === idx
@@ -817,45 +939,21 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 									Pricing & Quantity
 								</h3>
 								<div className='space-y-3'>
-									<div className='grid grid-cols-2 gap-3'>
-										<div>
-											<label className={labelCls}>Original Price (₹) *</label>
-											<div className='relative'>
-												<IndianRupee size={13} className='absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-seller-text-muted)]' />
-												<Input
-													type='number'
-													min={0}
-													className={cn(inputCls, 'pl-8')}
-													placeholder='0'
-													value={form.originalPrice || ''}
-													onChange={(e) => set('originalPrice', Number(e.target.value))}
-												/>
-											</div>
-										</div>
-										<div>
-											<label className={labelCls}>Selling Price (₹) *</label>
-											<div className='relative'>
-												<IndianRupee size={13} className='absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-seller-text-muted)]' />
-												<Input
-													type='number'
-													min={0}
-													className={cn(inputCls, 'pl-8')}
-													placeholder='0'
-													value={form.discountedPrice || ''}
-													onChange={(e) => set('discountedPrice', Number(e.target.value))}
-												/>
-											</div>
+									<div>
+										<label className={labelCls}>Original Price / MRP (₹) *</label>
+										<div className='relative'>
+											<IndianRupee size={13} className='absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-seller-text-muted)]' />
+											<Input
+												type='number'
+												min={0}
+												className={cn(inputCls, 'pl-8')}
+												placeholder='0'
+												value={form.originalPrice || ''}
+												onChange={(e) => set('originalPrice', Number(e.target.value))}
+												disabled={isEdit}
+											/>
 										</div>
 									</div>
-									{form.discountPercent > 0 && (
-										<div className='flex items-center gap-2 px-3 py-2 bg-[var(--color-seller-accent-light)] rounded-[var(--radius-md)]'>
-											<Zap size={13} className='text-[var(--color-seller-accent)]' />
-											<p className='text-xs font-semibold text-[var(--color-seller-accent)]'>
-												{form.discountPercent}% discount applied — customers save{' '}
-												{formatCurrency(form.originalPrice - form.discountedPrice)}
-											</p>
-										</div>
-									)}
 									<div className='grid grid-cols-2 gap-3'>
 										<div>
 											<label className={labelCls}>Total Quantity *</label>
@@ -869,10 +967,11 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 													set('totalQuantity', q)
 													set('quantityAvailable', q)
 												}}
+												disabled={isEdit}
 											/>
 										</div>
 										<div>
-											<label className={labelCls}>Weight (kg, optional)</label>
+											<label className={labelCls}>Weight per Unit (kg)</label>
 											<Input
 												type='number'
 												min={0}
@@ -881,22 +980,29 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 												placeholder='0.5'
 												value={form.weight ?? ''}
 												onChange={(e) => set('weight', e.target.value ? Number(e.target.value) : undefined)}
+												disabled={isEdit}
 											/>
 										</div>
 									</div>
-									<div>
-										<label className={labelCls}>Prep Time (minutes)</label>
-										<Input
-											type='number'
-											min={0}
-											className={inputCls}
-											placeholder='0 = ready immediately'
-											value={form.prepTimeMinutes || ''}
-											onChange={(e) => set('prepTimeMinutes', Number(e.target.value))}
-										/>
-									</div>
-								</div>
-							</section>
+									{isEdit && (
+										<div>
+											<label className={labelCls}>
+												<span className='flex items-center gap-1'>
+													Available Quantity
+													<span className='text-[var(--color-seller-accent)] font-bold'>(editable)</span>
+												</span>
+											</label>
+											<Input
+												type='number'
+												min={0}
+												className={inputCls}
+												value={form.quantityAvailable || ''}
+												onChange={(e) => set('quantityAvailable', Number(e.target.value))}
+											/>
+										</div>
+									)}
+							</div>
+						</section>
 
 							<div className='h-px bg-[var(--color-seller-border-subtle)]' />
 
@@ -915,6 +1021,7 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 												className={inputCls}
 												value={form.pickupStart}
 												onChange={(e) => set('pickupStart', e.target.value)}
+												disabled={isEdit}
 											/>
 										</div>
 										<div>
@@ -924,6 +1031,7 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 												className={inputCls}
 												value={form.pickupEnd}
 												onChange={(e) => set('pickupEnd', e.target.value)}
+												disabled={isEdit}
 											/>
 										</div>
 									</div>
@@ -934,6 +1042,7 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 											className={inputCls}
 											value={form.expiresAt}
 											onChange={(e) => set('expiresAt', e.target.value)}
+											disabled={isEdit}
 										/>
 									</div>
 								</div>
@@ -951,18 +1060,20 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 									<div>
 										<label className={labelCls}>Dietary Tags</label>
 										<div className='flex flex-wrap gap-2'>
-											{DIETARY_OPTIONS.map((d) => (
-												<button
-													key={d.value}
-													type='button'
-													onClick={() => toggleDietary(d.value)}
-													className={cn(
-														'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all duration-150',
-														form.dietaryTags.includes(d.value)
-															? 'bg-[var(--color-seller-accent)] text-white border-[var(--color-seller-accent)]'
-															: 'bg-transparent text-[var(--color-seller-text-secondary)] border-[var(--color-seller-border)] hover:border-[var(--color-seller-accent)]',
-													)}
-												>
+										{DIETARY_OPTIONS.map((d) => (
+											<button
+												key={d.value}
+												type='button'
+												onClick={() => !isEdit && toggleDietary(d.value)}
+												disabled={isEdit}
+												className={cn(
+													'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all duration-150',
+													isEdit ? 'opacity-50 cursor-not-allowed' : '',
+													form.dietaryTags.includes(d.value)
+														? 'bg-[var(--color-seller-accent)] text-white border-[var(--color-seller-accent)]'
+														: 'bg-transparent text-[var(--color-seller-text-secondary)] border-[var(--color-seller-border)] hover:border-[var(--color-seller-accent)]',
+												)}
+											>
 													<span>{d.icon}</span> {d.label}
 													{form.dietaryTags.includes(d.value) && <Check size={10} />}
 												</button>
@@ -972,18 +1083,20 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 									<div>
 										<label className={labelCls}>Allergens Present</label>
 										<div className='flex flex-wrap gap-2'>
-											{ALLERGEN_OPTIONS.map((a) => (
-												<button
-													key={a}
-													type='button'
-													onClick={() => toggleAllergen(a)}
-													className={cn(
-														'px-2.5 py-1 rounded-full text-xs font-medium border capitalize transition-all duration-150',
-														form.allergens.includes(a)
-															? 'bg-[var(--color-error-light)] text-[var(--color-error)] border-[var(--color-error)]'
-															: 'bg-transparent text-[var(--color-seller-text-muted)] border-[var(--color-seller-border)] hover:border-[var(--color-seller-text-muted)]',
-													)}
-												>
+										{ALLERGEN_OPTIONS.map((a) => (
+											<button
+												key={a}
+												type='button'
+												onClick={() => !isEdit && toggleAllergen(a)}
+												disabled={isEdit}
+												className={cn(
+													'px-2.5 py-1 rounded-full text-xs font-medium border capitalize transition-all duration-150',
+													isEdit ? 'opacity-50 cursor-not-allowed' : '',
+													form.allergens.includes(a)
+														? 'bg-[var(--color-error-light)] text-[var(--color-error)] border-[var(--color-error)]'
+														: 'bg-transparent text-[var(--color-seller-text-muted)] border-[var(--color-seller-border)] hover:border-[var(--color-seller-text-muted)]',
+												)}
+											>
 													{a}
 												</button>
 											))}
@@ -998,25 +1111,137 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 							<section>
 								<h3 className='text-sm font-bold text-[var(--color-seller-text-primary)] mb-3 flex items-center gap-2'>
 									<span className='w-5 h-5 rounded-full bg-[var(--color-seller-accent)] text-white text-[10px] font-bold flex items-center justify-center'>6</span>
-									Sustainability
+									Sustainability Impact
 								</h3>
-								<div>
-									<label className={labelCls}>CO₂ Saved Per Unit (kg)</label>
-									<Input
-										type='number'
-										min={0}
-										step={0.1}
-										className={inputCls}
-										placeholder='0.5'
-										value={form.co2SavedPerUnit}
-										onChange={(e) => set('co2SavedPerUnit', Number(e.target.value))}
-									/>
-									<p className='text-[11px] text-[var(--color-seller-text-muted)] mt-1.5 flex items-center gap-1'>
-										<Info size={10} />
-										Estimated CO₂ prevented per unit sold. Typically 0.5–3kg for bakery items.
+							{(() => {
+								const weight = form.weight ?? (isEdit ? (editListing?.weight ?? 0) : 0)
+								const qty = form.quantityAvailable || form.totalQuantity || 0
+									const co2PerUnit = weight > 0 ? Math.round(weight * 2.5 * 100) / 100 : 0
+									const co2Total = Math.round(co2PerUnit * qty * 100) / 100
+									const trees = co2Total > 0 ? Math.round((co2Total / 21.9) * 100) / 100 : 0
+									const hasData = weight > 0 && qty > 0
+									return hasData ? (
+										<div className='rounded-[var(--radius-lg)] border border-[var(--color-seller-accent)]/30 bg-[var(--color-seller-accent-light)] p-4 space-y-3'>
+											<div className='grid grid-cols-3 gap-3'>
+												<div className='text-center'>
+													<p className='text-[10px] font-semibold text-[var(--color-seller-text-muted)] uppercase tracking-wide mb-1'>CO₂ / Unit</p>
+													<p className='text-lg font-bold text-[var(--color-seller-accent)]'>{co2PerUnit} kg</p>
+												</div>
+												<div className='text-center border-x border-[var(--color-seller-accent)]/20'>
+													<p className='text-[10px] font-semibold text-[var(--color-seller-text-muted)] uppercase tracking-wide mb-1'>Total CO₂</p>
+													<p className='text-lg font-bold text-[var(--color-seller-accent)]'>{co2Total} kg</p>
+												</div>
+												<div className='text-center'>
+													<p className='text-[10px] font-semibold text-[var(--color-seller-text-muted)] uppercase tracking-wide mb-1'>Trees Eq.</p>
+													<p className='text-lg font-bold text-[var(--color-seller-accent)]'>{trees}</p>
+												</div>
+											</div>
+											<p className='text-[11px] text-[var(--color-seller-text-muted)] flex items-center gap-1'>
+												<Info size={10} />
+												Auto-calculated: weight × 2.5 = CO₂/unit · total CO₂ ÷ 21.9 = trees equivalent
+											</p>
+										</div>
+									) : (
+										<div className='rounded-[var(--radius-lg)] border border-[var(--color-seller-border)] bg-[var(--color-seller-surface-elevated)] p-4'>
+											<p className='text-[12px] text-[var(--color-seller-text-muted)] flex items-center gap-1.5'>
+												<Info size={12} />
+												Enter item weight (in section 3) to see CO₂ impact automatically calculated.
+											</p>
+										</div>
+									)
+								})()}
+							</section>
+
+							<div className='h-px bg-[var(--color-seller-border-subtle)]' />
+
+							{/* ── AI Pricing ── */}
+							{!isEdit && (
+							<section>
+								<h3 className='text-sm font-bold text-[var(--color-seller-text-primary)] mb-3 flex items-center gap-2'>
+									<span className='w-5 h-5 rounded-full bg-[var(--color-seller-accent)] text-white text-[10px] font-bold flex items-center justify-center'>7</span>
+									AI Pricing
+								</h3>
+								<div className='space-y-3'>
+									<p className='text-[11px] text-[var(--color-seller-text-muted)]'>
+										The AI agent analyses expiry time, inventory, demand, and weather to calculate the optimal selling price. Fill in the item name, original price, expiry, and quantity above first.
 									</p>
+									<Button
+										type='button'
+										onClick={handleCalculatePrice}
+										disabled={!canCalculate || isCalculatingPrice}
+										className='w-full bg-[var(--color-seller-accent)] hover:bg-[var(--color-seller-accent-hover)] text-white disabled:opacity-50 flex items-center gap-2'
+									>
+										{isCalculatingPrice ? (
+											<><Loader2 size={14} className='animate-spin' /> Calculating…</>
+										) : (
+											<><Bot size={14} /> Calculate Price</>
+										)}
+									</Button>
+
+									{aiPriceError && (
+										<div className='flex items-start gap-2 px-3 py-2 bg-[var(--color-error-light)] rounded-[var(--radius-md)]'>
+											<AlertTriangle size={13} className='text-[var(--color-error)] mt-0.5 shrink-0' />
+											<p className='text-xs text-[var(--color-error)]'>{aiPriceError}</p>
+										</div>
+									)}
+
+									{aiResult && (
+										<div className='rounded-[var(--radius-lg)] border border-[var(--color-seller-accent)]/40 bg-[var(--color-seller-accent-light)] p-4 space-y-3'>
+											{/* Price display */}
+											<div className='flex items-center justify-between'>
+												<div>
+													<p className='text-[10px] font-semibold text-[var(--color-seller-text-muted)] uppercase tracking-wide'>AI Selling Price</p>
+													<p className='text-2xl font-bold text-[var(--color-seller-text-primary)]'>
+														{formatCurrency(aiResult.discounted_price)}
+													</p>
+												</div>
+												<div className='text-right'>
+													<span className='inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[var(--color-seller-accent)] text-white text-xs font-bold'>
+														<Zap size={11} />
+														{Math.round(aiResult.discount_percent)}% off
+													</span>
+													<p className='text-[10px] text-[var(--color-seller-text-muted)] mt-1'>
+														original {formatCurrency(form.originalPrice)}
+													</p>
+												</div>
+											</div>
+
+											<div className='h-px bg-[var(--color-seller-accent)]/20' />
+
+										{/* Breakdown */}
+										<div className='space-y-1.5'>
+											<p className='text-[10px] font-semibold text-[var(--color-seller-text-muted)] uppercase tracking-wide mb-2'>Pricing Breakdown</p>
+											{[
+												{ label: 'Category', value: aiResult.pricing_factors.category },
+												{ label: 'Shelf life left', value: `${aiResult.remaining_shelf_life_hours}h` },
+												{ label: 'Expiry discount', value: `${Math.round(aiResult.pricing_factors.expiry_discount * 100)}%` },
+												{ label: 'Inventory discount', value: `${Math.round(aiResult.pricing_factors.inventory_discount * 100)}%` },
+												{ label: 'Urgency discount', value: `${Math.round(aiResult.pricing_factors.urgency_discount * 100)}%` },
+												{ label: 'Demand adj.', value: `${aiResult.pricing_factors.demand_adjustment >= 0 ? '+' : ''}${Math.round(aiResult.pricing_factors.demand_adjustment * 100)}%` },
+												{ label: 'NGO priority', value: aiResult.pricing_factors.ngo_priority ? 'Yes' : 'No' },
+											].map(({ label, value }) => (
+												<div key={label} className='flex justify-between items-center'>
+													<span className='text-[11px] text-[var(--color-seller-text-secondary)]'>{label}</span>
+													<span className={`text-[11px] font-semibold ${label === 'NGO priority' && aiResult.pricing_factors.ngo_priority ? 'text-amber-600' : 'text-[var(--color-seller-text-primary)]'}`}>{value}</span>
+												</div>
+											))}
+											{aiResult.pricing_factors.ngo_priority && aiResult.pricing_factors.ngo_action && (
+												<div className='mt-2 px-2.5 py-1.5 rounded-[var(--radius-sm)] bg-amber-50 border border-amber-200 flex items-start gap-1.5'>
+													<Info size={10} className='text-amber-600 mt-0.5 flex-shrink-0' />
+													<span className='text-[10px] text-amber-700 font-medium'>{aiResult.pricing_factors.ngo_action}</span>
+												</div>
+											)}
+										</div>
+
+											<p className='text-[10px] text-[var(--color-seller-text-muted)] flex items-center gap-1'>
+												<Info size={10} />
+												Reprices every {aiResult.pricing_factors.reprice_interval_minutes} min. Recalculate before publishing if expiry changed.
+											</p>
+										</div>
+									)}
 								</div>
 							</section>
+							)}
 
 							{/* Bottom padding */}
 							<div className='h-2' />
@@ -1024,26 +1249,36 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 
 						{/* Footer actions */}
 						<div className='flex-shrink-0 border-t border-[var(--color-seller-border)] px-5 py-4 space-y-2 bg-[var(--color-seller-surface)]'>
-							{!isValid && (
-								<p className='text-xs text-[var(--color-seller-text-muted)] flex items-center gap-1.5 mb-2'>
-									<AlertTriangle size={11} className='text-[var(--color-warning)]' />
-									Fill in item name, original price, and selling price to save.
-								</p>
-							)}
+						{saveError && (
+							<p className='text-xs text-red-600 flex items-center gap-1.5 mb-2'>
+								<AlertTriangle size={11} />
+								{saveError}
+							</p>
+						)}
+					{!isValid && !isEdit && (
+						<p className='text-xs text-[var(--color-seller-text-muted)] flex items-center gap-1.5 mb-2'>
+							<AlertTriangle size={11} className='text-[var(--color-warning)]' />
+							{!canCalculate
+								? 'Fill in item name, original price, expiry, and quantity — then calculate AI price.'
+								: 'Use "Calculate Price" in Section 7 to get an AI-suggested selling price.'}
+						</p>
+					)}
 							<div className='flex gap-2'>
 								<Button
 									variant='outline'
 									className='flex-1 border-[var(--color-seller-border)] text-[var(--color-seller-text-secondary)] hover:bg-[var(--color-seller-surface-elevated)]'
 									onClick={() => handleSave(false)}
-									disabled={!isValid}
+									disabled={!isValid || isSaving}
 								>
+									{isSaving ? <Loader2 size={14} className='animate-spin mr-1' /> : null}
 									Save as Draft
 								</Button>
 								<Button
 									className='flex-1 bg-[var(--color-seller-accent)] hover:bg-[var(--color-seller-accent-hover)] text-white'
 									onClick={() => handleSave(true)}
-									disabled={!isValid}
+									disabled={!isValid || isSaving}
 								>
+									{isSaving ? <Loader2 size={14} className='animate-spin mr-1' /> : null}
 									{isEdit ? 'Save & Publish' : 'Publish Now'}
 								</Button>
 							</div>

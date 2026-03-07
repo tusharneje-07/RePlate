@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { SlidersHorizontal, LayoutGrid, List, SearchX, Loader2 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { FoodCard } from '@/components/common/food-card'
 import { SearchBar } from '@/components/common/search-bar'
 import { CategoryTabs } from '@/components/common/category-tabs'
@@ -11,10 +11,11 @@ import { Badge } from '@/components/ui/badge'
 import { staggerContainer, fadeIn, slideDown } from '@/lib/motion'
 import { useUIStore } from '@/stores/ui-store'
 import { useLocationStore } from '@/stores/location-store'
-import { listingsApi } from '@/lib/api'
+import { listingsApi, favoritesApi } from '@/lib/api'
 import { mapListingToFoodItem } from '@/lib/mappers'
-import type { FoodFilters } from '@/types'
+import type { FoodFilters, FoodItem } from '@/types'
 import { cn } from '@/lib/utils'
+import { AIRecommendations } from '@/components/ai/AIRecommendations'
 
 export function BrowsePage() {
 	const [category, setCategory] = useState('all')
@@ -23,6 +24,7 @@ export function BrowsePage() {
 	const [showFilters, setShowFilters] = useState(false)
 	const { searchQuery } = useUIStore()
 	const { location, discoveryRadiusMeters } = useLocationStore()
+	const queryClient = useQueryClient()
 
 	const { data: listings = [], isLoading } = useQuery({
 		queryKey: ['listings', 'browse', location?.lat, location?.lng, discoveryRadiusMeters, filters.maxDistance],
@@ -36,7 +38,23 @@ export function BrowsePage() {
 				.then((r) => r.data),
 	})
 
-	const foodItems = listings.map(mapListingToFoodItem)
+	const foodItems = listings
+		.map(mapListingToFoodItem)
+		.filter((food) => new Date(food.expiresAt).getTime() > Date.now())
+
+	const favMutation = useMutation({
+		mutationFn: async (food: FoodItem) => {
+			if (food.isFavorited) {
+				await favoritesApi.removeFoodByListingId(food.id)
+			} else {
+				await favoritesApi.add({ favorite_type: 'food', food_listing_id: food.id })
+			}
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['listings'] })
+			queryClient.invalidateQueries({ queryKey: ['favorites'] })
+		},
+	})
 
 	const filtered = foodItems.filter((food) => {
 		if (category !== 'all' && food.category !== category) return false
@@ -87,7 +105,7 @@ export function BrowsePage() {
 				case 'rating':
 					return (b.rating ?? 0) - (a.rating ?? 0)
 				case 'expiry':
-					return new Date(a.pickupEnd).getTime() - new Date(b.pickupEnd).getTime()
+					return (a.pickupEnd ? new Date(a.pickupEnd).getTime() : Infinity) - (b.pickupEnd ? new Date(b.pickupEnd).getTime() : Infinity)
 				default:
 					return 0
 			}
@@ -120,8 +138,10 @@ export function BrowsePage() {
 				/>
 			</motion.div>
 
-			{/* ── Category Tabs ── */}
-			<CategoryTabs value={category} onChange={setCategory} />
+		{/* ── Category Tabs ── */}
+		<AIRecommendations />
+
+		<CategoryTabs value={category} onChange={setCategory} />
 
 			{/* ── Filter Panel (collapsible) ── */}
 			<AnimatePresence>
@@ -219,24 +239,24 @@ export function BrowsePage() {
 					animate='visible'
 					className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
 				>
-					{filtered.map((food) => (
-						<motion.div key={food.id} variants={fadeIn}>
-							<FoodCard food={food} />
-						</motion.div>
-					))}
-				</motion.div>
-			) : (
-				<motion.div
-					variants={staggerContainer}
-					initial='hidden'
-					animate='visible'
-					className='space-y-2.5'
-				>
-					{filtered.map((food) => (
-						<motion.div key={food.id} variants={fadeIn}>
-							<FoodCard food={food} layout='list' />
-						</motion.div>
-					))}
+				{filtered.map((food) => (
+					<motion.div key={food.id} variants={fadeIn}>
+						<FoodCard food={food} onFavoriteToggle={() => favMutation.mutate(food)} />
+					</motion.div>
+				))}
+			</motion.div>
+		) : (
+			<motion.div
+				variants={staggerContainer}
+				initial='hidden'
+				animate='visible'
+				className='space-y-2.5'
+			>
+				{filtered.map((food) => (
+					<motion.div key={food.id} variants={fadeIn}>
+						<FoodCard food={food} layout='list' onFavoriteToggle={() => favMutation.mutate(food)} />
+					</motion.div>
+				))}
 				</motion.div>
 			)}
 

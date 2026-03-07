@@ -72,58 +72,67 @@ export function ImpactPage() {
 			</motion.div>
 
 			{/* Hero — Level card */}
-			<motion.div
-				variants={slideUp}
-				className='relative overflow-hidden rounded-[var(--radius-xl)] bg-gradient-to-br from-[var(--color-eco)] to-[#0d5c2e] p-5 text-white shadow-[var(--shadow-elevated)]'
-			>
-				{/* Background decoration */}
-				<div className='absolute top-0 right-0 w-40 h-40 rounded-full bg-white/5 -translate-y-12 translate-x-12' />
-				<div className='absolute bottom-0 left-0 w-28 h-28 rounded-full bg-white/5 translate-y-10 -translate-x-8' />
+		<motion.div
+			variants={slideUp}
+			className='relative overflow-hidden rounded-[var(--radius-xl)] bg-gradient-to-br from-[#2d7a47] via-[#1e6038] to-[#0d5c2e] p-6 text-white shadow-[var(--shadow-elevated)]'
+		>
+			{/* Background decoration circles */}
+			<div className='absolute top-0 right-0 w-48 h-48 rounded-full bg-white/5 -translate-y-16 translate-x-16 pointer-events-none' />
+			<div className='absolute bottom-0 left-0 w-32 h-32 rounded-full bg-white/5 translate-y-12 -translate-x-10 pointer-events-none' />
+			<div className='absolute top-1/2 right-8 w-20 h-20 rounded-full bg-white/[0.03] -translate-y-1/2 pointer-events-none' />
 
-				<div className='relative z-10'>
-					<div className='flex items-start justify-between'>
-						<div>
-							<p className='text-xs text-green-200 font-medium'>Current Level</p>
-							<div className='flex items-center gap-2 mt-1'>
-								<div className='w-8 h-8 rounded-full bg-white/20 flex items-center justify-center'>
-									<LevelIcon size={18} className='text-white' />
-								</div>
-								<h2 className='text-2xl font-bold font-[var(--font-display)]'>{level.label}</h2>
-							</div>
+			<div className='relative z-10 space-y-4'>
+				{/* Row 1: level label + streak badge */}
+				<div className='flex items-center justify-between gap-3 flex-wrap'>
+					{/* Level */}
+					<div className='flex items-center gap-3 min-w-0'>
+						<div className='w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 ring-2 ring-white/30'>
+							<LevelIcon size={20} className='text-white' />
 						</div>
-						<div className='flex items-center gap-1.5 px-3 py-1.5 bg-white/20 rounded-full'>
-							<Flame size={14} className='text-orange-300' />
-							<span className='text-sm font-bold'>{impact.streak} day streak</span>
+						<div className='min-w-0'>
+							<p className='text-[11px] text-green-300 font-semibold uppercase tracking-widest leading-none mb-1'>
+								Current Level
+							</p>
+							<h2 className='text-2xl font-bold font-[var(--font-display)] leading-none'>
+								{level.label}
+							</h2>
 						</div>
 					</div>
-
-					{/* Progress to next level */}
-					{level.next && (
-						<div className='mt-4'>
-							<div className='flex items-center justify-between text-xs text-green-200 mb-1.5'>
-								<span>{level.label}</span>
-								<span>{level.next}</span>
-							</div>
-							<div className='h-2 bg-white/20 rounded-full overflow-hidden'>
-								<motion.div
-									initial={{ width: 0 }}
-									animate={{ width: `${impact.nextLevelProgress}%` }}
-									transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
-									className='h-full bg-white rounded-full'
-								/>
-							</div>
-							<p className='text-xs text-green-200 mt-1.5'>
-								{impact.nextLevelProgress}% to {level.next}
-							</p>
-						</div>
-					)}
-
-					<div className='mt-4 flex items-center gap-1 text-sm text-green-200'>
-						<Award size={14} />
-						<span>Total: {impact.totalOrders} orders rescued</span>
+					{/* Streak badge */}
+					<div className='flex items-center gap-1.5 px-3 py-1.5 bg-white/15 border border-white/20 rounded-full flex-shrink-0'>
+						<Flame size={14} className='text-orange-300 flex-shrink-0' />
+						<span className='text-sm font-bold whitespace-nowrap'>{impact.streak} day streak</span>
 					</div>
 				</div>
-			</motion.div>
+
+				{/* Row 2: Progress bar */}
+				{level.next && (
+					<div className='space-y-1.5'>
+						<div className='flex items-center justify-between text-xs font-semibold'>
+							<span className='text-green-300'>{level.label}</span>
+							<span className='text-green-300'>{level.next}</span>
+						</div>
+						<div className='h-2.5 bg-white/15 rounded-full overflow-hidden'>
+							<motion.div
+								initial={{ width: 0 }}
+								animate={{ width: `${impact.nextLevelProgress}%` }}
+								transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
+								className='h-full bg-white rounded-full'
+							/>
+						</div>
+						<p className='text-xs text-green-300 font-medium'>
+							{impact.nextLevelProgress}% to {level.next}
+						</p>
+					</div>
+				)}
+
+				{/* Row 3: Orders rescued */}
+				<div className='flex items-center gap-1.5 text-sm text-green-200 font-medium pt-1 border-t border-white/10'>
+					<Award size={14} className='flex-shrink-0' />
+					<span>Total: {impact.totalOrders} orders rescued</span>
+				</div>
+			</div>
+		</motion.div>
 
 			{/* Stats grid */}
 			<motion.div variants={slideUp} className='grid grid-cols-2 gap-3'>

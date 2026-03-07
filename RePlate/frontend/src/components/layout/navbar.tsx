@@ -7,7 +7,6 @@ import { useCartStore } from '@/stores/cart-store'
 import { useUIStore } from '@/stores/ui-store'
 import { useLocationStore } from '@/stores/location-store'
 import { useAuth } from '@/hooks/useAuth'
-import { mockNotifications } from '@/data/mock'
 import { cn } from '@/lib/utils'
 
 interface NavbarProps {
@@ -20,7 +19,8 @@ export function Navbar({ title, showBack: _showBack }: NavbarProps) {
 	const { toggleSidebar, setNotificationSheetOpen, setIsSearchOpen } = useUIStore()
 	const { location, openPicker } = useLocationStore()
 	const { user } = useAuth()
-	const unreadCount = mockNotifications.filter((n) => !n.isRead).length
+	// No consumer notifications API yet — badge hidden until backend is available
+	const unreadCount = 0
 
 	const locationLabel = location?.address ?? 'Set your location'
 	const avatarName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email : '?'

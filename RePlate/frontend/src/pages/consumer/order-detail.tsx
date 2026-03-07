@@ -15,7 +15,7 @@ import {
 	ChevronRight,
 	Loader2,
 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { PickupQRCode } from '@/components/common/pickup-qr-code'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -56,6 +56,16 @@ export function OrderDetailPage() {
 			return mapOrderOutToOrder(data)
 		},
 		enabled: !!orderId,
+		refetchInterval: 30_000,
+	})
+
+	const queryClient = useQueryClient()
+	const cancelMutation = useMutation({
+		mutationFn: () => ordersApi.cancel(orderId!),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['order', orderId] })
+			queryClient.invalidateQueries({ queryKey: ['orders'] })
+		},
 	})
 
 	if (isLoading) {
@@ -81,6 +91,7 @@ export function OrderDetailPage() {
 
 	const badgeConfig = statusBadgeConfig[order.status]
 	const isCancelled = order.status === 'cancelled'
+	const canCancel = order.status === 'pending' || order.status === 'confirmed'
 	const currentStep = STATUS_ORDER.indexOf(order.status)
 	const pickupDate = new Date(order.pickupTime)
 
@@ -299,20 +310,39 @@ export function OrderDetailPage() {
 				</div>
 			</motion.div>
 
-			{/* Reorder / browse */}
-			<motion.div variants={slideUp} className='flex gap-3'>
-				{order.status === 'completed' && (
-					<Button variant='outline' size='lg' className='flex-1'>
-						Reorder
-					</Button>
-				)}
-				<Button asChild size='lg' className='flex-1'>
-					<Link to='/consumer/browse'>
-						Browse More
-						<ChevronRight size={16} />
-					</Link>
+		{/* Cancel Order */}
+		{canCancel && (
+			<motion.div variants={slideUp}>
+				<Button
+					variant='outline'
+					size='lg'
+					className='w-full border-[var(--color-error)] text-[var(--color-error)] hover:bg-[var(--color-error-light)]'
+					onClick={() => cancelMutation.mutate()}
+					disabled={cancelMutation.isPending}
+				>
+					{cancelMutation.isPending ? (
+						<><Loader2 size={15} className='animate-spin' />Cancelling...</>
+					) : (
+						<><XCircle size={15} />Cancel Order</>
+					)}
 				</Button>
 			</motion.div>
+		)}
+
+		{/* Reorder / browse */}
+		<motion.div variants={slideUp} className='flex gap-3'>
+			{order.status === 'completed' && (
+				<Button variant='outline' size='lg' className='flex-1'>
+					Reorder
+				</Button>
+			)}
+			<Button asChild size='lg' className='flex-1'>
+				<Link to='/consumer/browse'>
+					Browse More
+					<ChevronRight size={16} />
+				</Link>
+			</Button>
+		</motion.div>
 		</motion.div>
 	)
 }

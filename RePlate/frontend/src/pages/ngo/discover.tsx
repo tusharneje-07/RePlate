@@ -18,6 +18,8 @@ import {
 	Info,
 	HeartHandshake,
 	Truck,
+	Sparkles,
+	RefreshCw,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -28,6 +30,7 @@ import { formatRelativeTime } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { useNGOStore } from '@/stores/ngo-store'
 import type { Donation } from '@/types'
+import { NGOMatchPanel } from '@/components/ai/NGOMatchPanel'
 
 // ── Components ────────────────────────────────────────────────
 
@@ -45,16 +48,19 @@ function UrgencyBadge({ urgency }: { urgency: Donation['urgency'] }) {
 
 // ── Main Discover Page ────────────────────────────────────────
 export function NGODiscoverPage() {
-	const { donations, profile, claimDonation } = useNGOStore()
+	const { donations, profile, claimDonation, refreshDonations } = useNGOStore()
 
 	const [searchQuery, setSearchQuery] = useState('')
 	const [activeCategory, setActiveCategory] = useState<string>('all')
 	const [showFilters, setShowFilters] = useState(false)
+	const [aiMatchOpen, setAiMatchOpen] = useState(false)
 
 	// Filter state
 	const [maxDistance, setMaxDistance] = useState<number>(10) // km
 	const [urgencyFilter, setUrgencyFilter] = useState<string[]>([])
 	const [minQuantity, setMinQuantity] = useState<number>(0)
+
+	const [refreshing, setRefreshing] = useState(false)
 
 	// Selected donation for claim flow
 	const [selectedDonation, setSelectedDonation] = useState<Donation | null>(null)
@@ -107,22 +113,44 @@ export function NGODiscoverPage() {
 							className='pl-9 bg-[var(--color-ngo-surface-elevated)] border-transparent focus-visible:ring-[var(--color-ngo-accent)] h-10 rounded-full text-sm'
 						/>
 					</div>
-					<Button
-						variant='outline'
-						size='icon'
-						onClick={() => setShowFilters(!showFilters)}
-						className={cn(
-							'h-10 w-10 rounded-full flex-shrink-0 transition-colors',
-							showFilters
-								? 'bg-[var(--color-ngo-accent)] text-white border-[var(--color-ngo-accent)] hover:bg-[var(--color-ngo-accent-hover)] hover:text-white'
-								: 'bg-white border-[var(--color-ngo-border)] text-[var(--color-ngo-text-secondary)] hover:bg-[var(--color-ngo-surface-elevated)]',
-						)}
-					>
-						<SlidersHorizontal className='w-4 h-4' />
-						{(urgencyFilter.length > 0 || maxDistance < 10 || minQuantity > 0) && !showFilters && (
-							<span className='absolute top-2 right-2.5 w-2 h-2 rounded-full bg-[var(--color-ngo-accent)] border border-white' />
-						)}
-					</Button>
+				<Button
+					variant='outline'
+					size='icon'
+					onClick={() => setShowFilters(!showFilters)}
+					className={cn(
+						'h-10 w-10 rounded-full flex-shrink-0 transition-colors',
+						showFilters
+							? 'bg-[var(--color-ngo-accent)] text-white border-[var(--color-ngo-accent)] hover:bg-[var(--color-ngo-accent-hover)] hover:text-white'
+							: 'bg-white border-[var(--color-ngo-border)] text-[var(--color-ngo-text-secondary)] hover:bg-[var(--color-ngo-surface-elevated)]',
+					)}
+				>
+					<SlidersHorizontal className='w-4 h-4' />
+					{(urgencyFilter.length > 0 || maxDistance < 10 || minQuantity > 0) && !showFilters && (
+						<span className='absolute top-2 right-2.5 w-2 h-2 rounded-full bg-[var(--color-ngo-accent)] border border-white' />
+					)}
+				</Button>
+				<Button
+					size='sm'
+					onClick={() => setAiMatchOpen(true)}
+					className='h-10 flex-shrink-0 rounded-full bg-[var(--color-ngo-accent)] hover:bg-[var(--color-ngo-accent-hover)] text-white gap-1.5 px-3 text-xs font-semibold'
+				>
+					<Sparkles className='w-3.5 h-3.5' />
+					<span className='hidden sm:inline'>AI Match</span>
+				</Button>
+				<Button
+					variant='outline'
+					size='icon'
+					disabled={refreshing}
+					onClick={async () => {
+						setRefreshing(true)
+						await refreshDonations()
+						setRefreshing(false)
+					}}
+					className='h-10 w-10 rounded-full flex-shrink-0 bg-white border-[var(--color-ngo-border)] text-[var(--color-ngo-text-secondary)] hover:bg-[var(--color-ngo-surface-elevated)] disabled:opacity-50'
+					title='Refresh listings'
+				>
+					<RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} />
+				</Button>
 				</div>
 
 				{/* Categories */}
@@ -586,8 +614,11 @@ export function NGODiscoverPage() {
 						</>
 					)}
 				</AnimatePresence>
-			</div>
 		</div>
+
+		{/* ── AI Smart Match Panel ── */}
+		<NGOMatchPanel open={aiMatchOpen} onClose={() => setAiMatchOpen(false)} />
+	</div>
 	)
 }
 

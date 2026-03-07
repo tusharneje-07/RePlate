@@ -79,8 +79,8 @@ export interface FoodItem {
 	weight?: number
 	manufacturedAt?: string
 	expiresAt: string
-	pickupStart: string
-	pickupEnd: string
+	pickupStart: string | null
+	pickupEnd: string | null
 	status: FoodStatus
 	co2SavedKg: number
 	seller: SellerSummary
@@ -127,7 +127,7 @@ export interface CartItem {
 	foodItem: FoodItem
 	quantity: number
 	subtotal: number
-	pickupTime: string
+	pickupTime: string | null
 }
 
 export interface Cart {
@@ -350,11 +350,12 @@ export interface SellerListing {
 	quantitySold: number
 	unit: string
 	weight?: number
-	prepTimeMinutes: number
+	prepTimeMinutes?: number
 	pickupStart: string
 	pickupEnd: string
 	expiresAt: string
 	status: ListingStatus
+	moderationStatus: 'pending_inspection' | 'approved' | 'rejected' | null
 	co2SavedPerUnit: number
 	// Performance
 	views: number

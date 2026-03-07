@@ -9,6 +9,7 @@ import {
 	CreditCard,
 	Wallet,
 	Smartphone,
+	Banknote,
 	ArrowRight,
 	ChevronDown,
 	ChevronUp,
@@ -23,7 +24,7 @@ import { ordersApi } from '@/lib/api'
 import { formatCurrency, formatPickupTime, cn } from '@/lib/utils'
 import { staggerContainer, slideUp, scaleIn } from '@/lib/motion'
 
-type PaymentMethod = 'upi' | 'card' | 'wallet'
+type PaymentMethod = 'upi' | 'card' | 'wallet' | 'cash'
 
 interface PaymentOption {
 	id: PaymentMethod
@@ -36,6 +37,7 @@ const paymentOptions: PaymentOption[] = [
 	{ id: 'upi', label: 'UPI', description: 'PhonePe, GPay, Paytm & more', icon: Smartphone },
 	{ id: 'card', label: 'Credit / Debit Card', description: 'Visa, Mastercard, RuPay', icon: CreditCard },
 	{ id: 'wallet', label: 'RePlate Wallet', description: 'Balance: ₹0.00', icon: Wallet },
+	{ id: 'cash', label: 'Cash on Pickup', description: 'Pay directly at the store', icon: Banknote },
 ]
 
 export function CheckoutPage() {
@@ -245,9 +247,9 @@ export function CheckoutPage() {
 							<div className='flex items-center gap-2 ml-10'>
 								<Clock size={12} className='text-[var(--color-brand-accent)] flex-shrink-0' />
 								<p className='text-xs text-[var(--color-text-muted)]'>
-									{formatPickupTime(new Date(group.items[0].foodItem.pickupStart))}
-									{' – '}
-									{formatPickupTime(new Date(group.items[0].foodItem.pickupEnd))}
+									{group.items[0].foodItem.pickupStart && group.items[0].foodItem.pickupEnd
+										? `${formatPickupTime(new Date(group.items[0].foodItem.pickupStart))} – ${formatPickupTime(new Date(group.items[0].foodItem.pickupEnd))}`
+										: 'See store hours'}
 								</p>
 							</div>
 						</div>
@@ -375,14 +377,17 @@ export function CheckoutPage() {
 				</div>
 			</motion.div>
 
-			{/* Security note */}
-			<motion.div
-				variants={slideUp}
-				className='flex items-center gap-2 text-xs text-[var(--color-text-muted)]'
-			>
-				<ShieldCheck size={14} className='text-[var(--color-eco)] flex-shrink-0' />
-				<span>Your payment is secured with 256-bit encryption. RePlate never stores card details.</span>
-			</motion.div>
+		{/* Security / info note */}
+		<motion.div
+			variants={slideUp}
+			className='flex items-center gap-2 text-xs text-[var(--color-text-muted)]'
+		>
+			<ShieldCheck size={14} className='text-[var(--color-eco)] flex-shrink-0' />
+			{selectedPayment === 'cash'
+				? <span>Pay in cash directly at the seller when you pick up your order.</span>
+				: <span>Your payment is secured with 256-bit encryption. RePlate never stores card details.</span>
+			}
+		</motion.div>
 
 			{/* Place Order CTA */}
 			<motion.div variants={slideUp}>
@@ -399,7 +404,7 @@ export function CheckoutPage() {
 						</>
 					) : (
 						<>
-							Pay {formatCurrency(grandTotal)}
+							{selectedPayment === 'cash' ? 'Place Order' : `Pay ${formatCurrency(grandTotal)}`}
 							<ArrowRight size={18} />
 						</>
 					)}

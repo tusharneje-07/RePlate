@@ -13,11 +13,15 @@ import {
 	ChevronRight,
 	Sprout,
 	HandHeart,
+	PackageCheck,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/stores/ui-store'
 import { useCartStore } from '@/stores/cart-store'
 import { Badge } from '@/components/ui/badge'
+import { impactApi } from '@/lib/api'
+import { mapImpactStatsOut } from '@/lib/mappers'
 
 const navItems = [
 	{ to: '/consumer/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -27,6 +31,7 @@ const navItems = [
 	{ to: '/consumer/favorites', icon: Heart, label: 'Favourites' },
 	{ to: '/consumer/impact', icon: Leaf, label: 'My Impact' },
 	{ to: '/consumer/list-food', icon: HandHeart, label: 'List Surplus' },
+	{ to: '/consumer/my-donations', icon: PackageCheck, label: 'My Donations' },
 	{ to: '/consumer/profile', icon: User, label: 'Profile' },
 	{ to: '/consumer/settings', icon: Settings, label: 'Settings' },
 ]
@@ -35,6 +40,14 @@ export function Sidebar() {
 	const { sidebarOpen, toggleSidebar } = useUIStore()
 	const { totalItems } = useCartStore()
 	const location = useLocation()
+
+	const { data: impact } = useQuery({
+		queryKey: ['impact'],
+		queryFn: async () => {
+			const { data } = await impactApi.getMyImpact()
+			return mapImpactStatsOut(data)
+		},
+	})
 
 	return (
 		<motion.aside
@@ -125,25 +138,29 @@ export function Sidebar() {
 				})}
 			</nav>
 
-			{/* Eco badge */}
-			<AnimatePresence>
-				{sidebarOpen && (
-					<motion.div
-						initial={{ opacity: 0 }}
-						animate={{ opacity: 1 }}
-						exit={{ opacity: 0 }}
-						className='mx-3 mb-4 p-3 rounded-[var(--radius-md)] bg-[var(--color-eco-muted)] border border-[var(--color-eco-light)]'
-					>
-						<div className='flex items-center gap-2 mb-1'>
-							<Leaf className='w-3.5 h-3.5 text-[var(--color-eco)]' />
-							<span className='text-xs font-semibold text-[var(--color-eco)]'>Sapling Level</span>
-						</div>
-						<p className='text-[11px] text-[var(--color-text-muted)] leading-snug'>
-							94.3 kg CO₂ saved. 32% to Tree!
-						</p>
-					</motion.div>
-				)}
-			</AnimatePresence>
+		{/* Eco badge */}
+		<AnimatePresence>
+			{sidebarOpen && (
+				<motion.div
+					initial={{ opacity: 0 }}
+					animate={{ opacity: 1 }}
+					exit={{ opacity: 0 }}
+					className='mx-3 mb-4 p-3 rounded-[var(--radius-md)] bg-[var(--color-eco-muted)] border border-[var(--color-eco-light)]'
+				>
+					<div className='flex items-center gap-2 mb-1'>
+						<Leaf className='w-3.5 h-3.5 text-[var(--color-eco)]' />
+						<span className='text-xs font-semibold text-[var(--color-eco)] capitalize'>
+							{impact?.level ?? 'Seedling'} Level
+						</span>
+					</div>
+					<p className='text-[11px] text-[var(--color-text-muted)] leading-snug'>
+						{impact
+							? `${impact.totalCo2Saved} kg CO₂ saved. ${impact.nextLevelProgress}% to next level!`
+							: 'Loading your impact...'}
+					</p>
+				</motion.div>
+			)}
+		</AnimatePresence>
 
 			{/* Toggle */}
 			<button

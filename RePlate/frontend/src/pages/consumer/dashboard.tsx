@@ -4,15 +4,12 @@ import { motion } from 'motion/react'
 import {
 	MapPin,
 	Leaf,
-	TrendingUp,
 	Zap,
 	ArrowRight,
-	CloudRain,
-	Sparkles,
 	Flame,
 	HandHeart,
 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { FoodCard } from '@/components/common/food-card'
 import { CategoryTabs } from '@/components/common/category-tabs'
 import { SearchBar } from '@/components/common/search-bar'
@@ -22,18 +19,24 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { staggerContainer, slideUp, fadeIn } from '@/lib/motion'
 import { formatCurrency } from '@/lib/utils'
-import { listingsApi, impactApi } from '@/lib/api'
+import { listingsApi, impactApi, favoritesApi } from '@/lib/api'
 import { mapListingToFoodItem, mapImpactStatsOut } from '@/lib/mappers'
 import { useAuth } from '@/hooks/useAuth'
 import { useLocationStore } from '@/stores/location-store'
+import type { FoodItem } from '@/types'
 
 export function DashboardPage() {
 	const { user } = useAuth()
 	const { location, openPicker } = useLocationStore()
 	const [category, setCategory] = useState('all')
+	const queryClient = useQueryClient()
 
 	// Derive greeting name from real auth user
 	const firstName = user?.firstName ?? user?.email?.split('@')[0] ?? 'there'
+
+	// Time-aware greeting
+	const hour = new Date().getHours()
+	const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
 	const { data: allFoodItems = [] } = useQuery({
 		queryKey: ['listings'],
@@ -43,6 +46,10 @@ export function DashboardPage() {
 		},
 	})
 
+	const activeFoodItems = allFoodItems.filter(
+		(food) => new Date(food.expiresAt).getTime() > Date.now(),
+	)
+
 	const { data: impact } = useQuery({
 		queryKey: ['impact'],
 		queryFn: async () => {
@@ -51,12 +58,28 @@ export function DashboardPage() {
 		},
 	})
 
+	// Favorite toggle mutation
+	const favMutation = useMutation({
+		mutationFn: async (food: FoodItem) => {
+			if (food.isFavorited) {
+				await favoritesApi.removeFoodByListingId(food.id)
+			} else {
+				await favoritesApi.add({ favorite_type: 'food', food_listing_id: food.id })
+			}
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['listings'] })
+			queryClient.invalidateQueries({ queryKey: ['favorites'] })
+		},
+	})
+
 	const filteredFood =
 		category === 'all'
-			? allFoodItems
-			: allFoodItems.filter((f) => f.category === category)
+			? activeFoodItems
+			: activeFoodItems.filter((f) => f.category === category)
 
-	const urgentDeals = allFoodItems.filter((f) => {
+	const urgentDeals = activeFoodItems.filter((f) => {
+		if (!f.pickupEnd) return false
 		const minsLeft = Math.floor(
 			(new Date(f.pickupEnd).getTime() - Date.now()) / 60000,
 		)
@@ -73,7 +96,7 @@ export function DashboardPage() {
 			{/* ── Greeting Header ── */}
 			<motion.div variants={slideUp} className='flex items-start justify-between gap-4'>
 				<div>
-					<p className='text-sm text-[var(--color-text-muted)] mb-0.5'>Good morning</p>
+					<p className='text-sm text-[var(--color-text-muted)] mb-0.5'>{greeting}</p>
 					<h1 className='text-2xl font-bold font-[var(--font-display)] text-[var(--color-text-primary)]'>
 						{firstName}
 					</h1>
@@ -109,21 +132,7 @@ export function DashboardPage() {
 				/>
 			</motion.div>
 
-			{/* ── Weather Alert (conditional) ── */}
-			<motion.div
-				variants={slideUp}
-				className='flex items-start gap-3 px-4 py-3 bg-[var(--color-info-light)] rounded-[var(--radius-lg)] border border-blue-200'
-			>
-				<CloudRain size={18} className='text-[var(--color-info)] flex-shrink-0 mt-0.5' />
-				<div className='min-w-0'>
-					<p className='text-sm font-semibold text-[var(--color-info)]'>Rain expected at 6 PM</p>
-					<p className='text-xs text-[var(--color-info)] opacity-80 mt-0.5'>
-						Plan your pickups before 5:30 PM. 3 sellers are near covered areas.
-					</p>
-				</div>
-			</motion.div>
-
-			{/* ── Urgent / Flash Deals ── */}
+		{/* ── Urgent / Flash Deals ── */}
 			{urgentDeals.length > 0 && (
 				<motion.section variants={slideUp}>
 					<div className='flex items-center justify-between mb-3'>
@@ -142,44 +151,17 @@ export function DashboardPage() {
 						</Link>
 					</div>
 
-					<div className='flex gap-3 overflow-x-auto no-scrollbar pb-2'>
-						{urgentDeals.map((food) => (
-							<div key={food.id} className='flex-shrink-0 w-[200px]'>
-								<FoodCard food={food} />
-							</div>
-						))}
+				<div className='flex gap-3 overflow-x-auto no-scrollbar pb-2'>
+					{urgentDeals.map((food) => (
+						<div key={food.id} className='flex-shrink-0 w-[200px]'>
+							<FoodCard food={food} onFavoriteToggle={() => favMutation.mutate(food)} />
+						</div>
+					))}
 					</div>
 				</motion.section>
 			)}
 
-			{/* ── AI Recommendations ── */}
-			<motion.section
-				variants={slideUp}
-				className='relative overflow-hidden rounded-[var(--radius-xl)] bg-gradient-to-br from-[var(--color-brand-accent)] to-[#e05d00] p-4 text-white'
-			>
-				<div className='flex items-start gap-3'>
-					<div className='w-9 h-9 rounded-[var(--radius-md)] bg-white/20 flex items-center justify-center flex-shrink-0'>
-						<Sparkles size={18} className='text-white' />
-					</div>
-					<div className='flex-1 min-w-0'>
-						<p className='text-xs font-medium opacity-80 mb-0.5'>AI Recommendation</p>
-						<h3 className='font-semibold text-sm leading-snug'>
-							Based on your taste: try the Brunch Surprise Bag from Café Terroir — only 3 left!
-						</h3>
-						<Link
-							to='/consumer/browse'
-							className='inline-flex items-center gap-1 mt-2 text-xs font-semibold bg-white/20 hover:bg-white/30 transition-colors px-2.5 py-1 rounded-full'
-						>
-							View deals <ArrowRight size={10} />
-						</Link>
-					</div>
-				</div>
-				{/* Decorative bg circles */}
-				<div className='absolute -right-8 -top-8 w-32 h-32 rounded-full bg-white/10 pointer-events-none' />
-				<div className='absolute -right-4 bottom-0 w-20 h-20 rounded-full bg-white/5 pointer-events-none' />
-			</motion.section>
-
-			{/* ── Surplus Food Listing CTA ── */}
+		{/* ── Surplus Food Listing CTA ── */}
 			<motion.section variants={slideUp}>
 				<Link to='/consumer/list-food'>
 					<div className='relative overflow-hidden flex items-center gap-4 px-4 py-4 rounded-[var(--radius-xl)] bg-[var(--color-eco-muted)] border border-[var(--color-eco-light)] hover:shadow-md transition-shadow'>
@@ -280,11 +262,11 @@ export function DashboardPage() {
 				variants={staggerContainer}
 				className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3'
 			>
-				{filteredFood.slice(0, 6).map((food) => (
-					<motion.div key={food.id} variants={fadeIn}>
-						<FoodCard food={food} />
-					</motion.div>
-				))}
+			{filteredFood.slice(0, 6).map((food) => (
+				<motion.div key={food.id} variants={fadeIn}>
+					<FoodCard food={food} onFavoriteToggle={() => favMutation.mutate(food)} />
+				</motion.div>
+			))}
 			</motion.div>
 
 			{filteredFood.length > 6 && (
@@ -306,11 +288,11 @@ export function DashboardPage() {
 						<h2 className='text-base font-bold font-[var(--font-display)]'>Quick Picks</h2>
 					</div>
 				</div>
-				<div className='space-y-2.5'>
-					{allFoodItems.slice(0, 4).map((food) => (
-						<FoodCard key={food.id} food={food} layout='list' />
-					))}
-				</div>
+			<div className='space-y-2.5'>
+				{activeFoodItems.slice(0, 4).map((food) => (
+					<FoodCard key={food.id} food={food} layout='list' onFavoriteToggle={() => favMutation.mutate(food)} />
+				))}
+			</div>
 			</motion.section>
 
 			{/* Bottom padding for mobile nav */}

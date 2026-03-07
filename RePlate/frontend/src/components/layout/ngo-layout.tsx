@@ -1,11 +1,18 @@
+import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import { NGONavbar } from './ngo-navbar'
 import { NGOSidebar } from './ngo-sidebar'
 import { NGOMobileBottomNav } from './ngo-mobile-bottom-nav'
+import { useNGOStore } from '@/stores/ngo-store'
 
 export function NGOLayout() {
 	const location = useLocation()
+	const initialize = useNGOStore((s) => s.initialize)
+
+	useEffect(() => {
+		initialize()
+	}, [initialize])
 
 	return (
 		<div className='flex h-dvh bg-[var(--color-ngo-bg)] text-[var(--color-ngo-text-primary)] font-[var(--font-body)] overflow-hidden'>

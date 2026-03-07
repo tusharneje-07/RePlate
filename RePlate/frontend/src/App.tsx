@@ -24,6 +24,7 @@ import { ImpactPage } from '@/pages/consumer/impact'
 import { ProfilePage } from '@/pages/consumer/profile'
 import { SettingsPage } from '@/pages/consumer/settings'
 import { ListFoodPage } from '@/pages/consumer/list-food'
+import { MyDonationsPage } from '@/pages/consumer/my-donations'
 
 // ── Seller Module ──────────────────────────────────────────────────────────────
 import { SellerLayout } from '@/components/layout/seller-layout'
@@ -210,6 +211,7 @@ export default function App() {
 				<Route path='profile' element={<ProfilePage />} />
 				<Route path='settings' element={<SettingsPage />} />
 				<Route path='list-food' element={<ListFoodPage />} />
+			<Route path='my-donations' element={<MyDonationsPage />} />
 			</Route>
 
 		{/* ── Seller module — wrapped in SellerLayout ── */}

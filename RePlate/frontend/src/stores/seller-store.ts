@@ -38,11 +38,12 @@ interface SellerState {
 	refreshReviews: () => Promise<void>
 	refreshProfile: () => Promise<void>
 
-	addListing: (listing: SellerListing) => Promise<void>
+	addListing: (listing: Partial<SellerListing>) => Promise<void>
 	updateListing: (id: string, updates: Partial<SellerListing>) => Promise<void>
 	deleteListing: (id: string) => Promise<void>
 	pauseListing: (id: string) => Promise<void>
 	restockListing: (id: string, quantity: number) => Promise<void>
+	requestInspection: (id: string) => Promise<void>
 
 	updateOrderStatus: (id: string, status: SellerOrderStatus) => Promise<void>
 	getOrderById: (id: string) => SellerOrder | undefined
@@ -191,6 +192,18 @@ export const useSellerStore = create<SellerState>()((set, get) => ({
 			totalQuantity: listing.totalQuantity + quantity,
 			status: 'active',
 		})
+	},
+
+	requestInspection: async (id) => {
+		await sellerApi.requestInspection(id)
+		// Optimistically update moderationStatus to pending_inspection and pause the listing
+		set((state) => ({
+			listings: state.listings.map((item) =>
+				item.id === id
+					? { ...item, moderationStatus: 'pending_inspection' as const, status: 'paused' as const }
+					: item,
+			),
+		}))
 	},
 
 	updateOrderStatus: async (id, status) => {

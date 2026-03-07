@@ -89,10 +89,10 @@ export function FoodDetailPage() {
 
 	const discount = calculateDiscount(food.originalPrice, food.discountedPrice)
 	const cartItem = items.find((i) => i.foodItem.id === food.id)
-	const pickupEnd = new Date(food.pickupEnd)
-	const pickupStart = new Date(food.pickupStart)
-	const minsLeft = Math.floor((pickupEnd.getTime() - Date.now()) / 60000)
-	const isUrgent = minsLeft > 0 && minsLeft < 90
+	const pickupEnd = food.pickupEnd ? new Date(food.pickupEnd) : null
+	const pickupStart = food.pickupStart ? new Date(food.pickupStart) : null
+	const minsLeft = pickupEnd ? Math.floor((pickupEnd.getTime() - Date.now()) / 60000) : null
+	const isUrgent = minsLeft !== null && minsLeft > 0 && minsLeft < 90
 
 	function handleAddToCart() {
 		if (!food) return
@@ -256,7 +256,9 @@ export function FoodDetailPage() {
 				{
 					icon: Clock,
 					label: 'Pickup Window',
-					value: `${pickupStart.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })} – ${pickupEnd.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`,
+					value: pickupStart && pickupEnd
+						? `${pickupStart.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })} – ${pickupEnd.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`
+						: 'See store hours',
 					color: isUrgent ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-primary)]',
 				},
 				{

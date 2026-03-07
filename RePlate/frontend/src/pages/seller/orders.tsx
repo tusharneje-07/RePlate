@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import {
 	ArrowLeft,
@@ -8,31 +8,31 @@ import {
 	Phone,
 	ShoppingBag,
 	QrCode,
-	ChevronRight,
 	Search,
 	X,
 	Check,
 	AlertTriangle,
 	Package,
 	Truck,
-	Star,
 	XCircle,
-	User,
-	Leaf,
-	IndianRupee,
-	ScanLine,
-	RefreshCw,
-	Filter,
 	MessageSquare,
+	RefreshCw,
+	ScanLine,
+	Loader2,
+	Camera,
+	CameraOff,
 } from 'lucide-react'
+import { BrowserMultiFormatReader } from '@zxing/browser'
+import type { IScannerControls } from '@zxing/browser'
+import { NotFoundException } from '@zxing/library'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '@/lib/motion'
 import { formatCurrency, formatRelativeTime, formatPickupTime } from '@/lib/utils'
-import { useSellerStore } from '@/stores/seller-store'
-import { useSellerUIStore } from '@/stores/seller-ui-store'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { sellerApi } from '@/lib/api'
+import { mapSellerOrderOutToSellerOrder } from '@/lib/mappers'
 import type { SellerOrder, SellerOrderStatus } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -117,13 +117,12 @@ const STATUS_CONFIG: Record<
 	},
 }
 
-// Next action for each status
+// Next action for each status (ready_for_pickup requires QR scan — no direct button)
 const NEXT_ACTION: Partial<
 	Record<SellerOrderStatus, { label: string; next: SellerOrderStatus; color: string }>
 > = {
 	pending: { label: 'Confirm Order', next: 'confirmed', color: 'bg-[var(--color-info)] hover:bg-[var(--color-info)]/90 text-white' },
 	confirmed: { label: 'Mark Ready', next: 'ready_for_pickup', color: 'bg-[var(--color-success)] hover:bg-[var(--color-success)]/90 text-white' },
-	ready_for_pickup: { label: 'Complete', next: 'completed', color: 'bg-[var(--color-seller-accent)] hover:bg-[var(--color-seller-accent-hover)] text-white' },
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -137,21 +136,74 @@ interface QRScannerProps {
 
 function QRScannerModal({ order, onClose, onVerified }: QRScannerProps) {
 	const [step, setStep] = useState<'scan' | 'verified' | 'error'>('scan')
-	const [scanning, setScanning] = useState(false)
+	const [cameraError, setCameraError] = useState<string | null>(null)
+	const [errorMsg, setErrorMsg] = useState<string>('')
+	const videoRef = useRef<HTMLVideoElement>(null)
+	const controlsRef = useRef<IScannerControls | null>(null)
 
 	if (!order) return null
 
-	const handleSimulateScan = () => {
-		setScanning(true)
-		setTimeout(() => {
-			setScanning(false)
-			setStep('verified')
-		}, 1800)
-	}
+	// eslint-disable-next-line react-hooks/rules-of-hooks
+	const stopScanner = useCallback(() => {
+		if (controlsRef.current) {
+			controlsRef.current.stop()
+			controlsRef.current = null
+		}
+	}, [])
+
+	// eslint-disable-next-line react-hooks/rules-of-hooks
+	useEffect(() => {
+		if (step !== 'scan' || !videoRef.current) return
+
+		let cancelled = false
+		const reader = new BrowserMultiFormatReader()
+
+		reader
+			.decodeFromVideoDevice(undefined, videoRef.current, (result, error, controls) => {
+				if (cancelled) { controls.stop(); return }
+				controlsRef.current = controls
+
+				if (result) {
+					const scanned = result.getText()
+					controls.stop()
+					controlsRef.current = null
+					if (scanned === order.qrCode) {
+						setStep('verified')
+					} else {
+						setErrorMsg(`Scanned code does not match this order.`)
+						setStep('error')
+					}
+					return
+				}
+				if (error && !(error instanceof NotFoundException)) {
+					controls.stop()
+					controlsRef.current = null
+					setErrorMsg('Camera decoding failed. Please try again.')
+					setStep('error')
+				}
+			})
+			.catch((e: unknown) => {
+				if (!cancelled) {
+					const msg = e instanceof Error ? e.message : 'Camera unavailable'
+					setCameraError(msg)
+				}
+			})
+
+		return () => {
+			cancelled = true
+			stopScanner()
+		}
+	}, [step, order.qrCode, stopScanner])
 
 	const handleComplete = () => {
 		onVerified()
 		onClose()
+	}
+
+	const handleRetry = () => {
+		setCameraError(null)
+		setErrorMsg('')
+		setStep('scan')
 	}
 
 	return (
@@ -183,7 +235,7 @@ function QRScannerModal({ order, onClose, onVerified }: QRScannerProps) {
 						</div>
 						<button
 							type='button'
-							onClick={onClose}
+							onClick={() => { stopScanner(); onClose() }}
 							className='p-2 rounded-[var(--radius-md)] text-[var(--color-seller-text-muted)] hover:bg-[var(--color-seller-surface-elevated)] transition-colors'
 						>
 							<X size={16} />
@@ -193,42 +245,43 @@ function QRScannerModal({ order, onClose, onVerified }: QRScannerProps) {
 					<div className='px-5 pb-6'>
 						{step === 'scan' && (
 							<>
-								{/* QR code display */}
-								<div className='relative mx-auto w-52 h-52 mb-5 rounded-[var(--radius-xl)] overflow-hidden bg-white border-2 border-[var(--color-seller-border)] flex items-center justify-center'>
-									{/* Simulated QR grid */}
-									<div className='grid grid-cols-7 gap-[3px] p-3 opacity-80'>
-										{Array.from({ length: 49 }).map((_, i) => {
-											const corners = [0, 1, 2, 7, 8, 9, 14, 15, 16, 32, 33, 34, 39, 40, 41, 46, 47, 48]
-											const isSolid = corners.includes(i) || Math.random() > 0.55
-											return (
-												<div
-													key={i}
-													className={cn(
-														'w-3.5 h-3.5 rounded-[2px]',
-														isSolid ? 'bg-[var(--color-seller-text-primary)]' : 'bg-transparent',
-													)}
-												/>
-											)
-										})}
-									</div>
-
-									{/* Scanning animation */}
-									{scanning && (
-										<motion.div
-											initial={{ top: '10%' }}
-											animate={{ top: ['10%', '85%', '10%'] }}
-											transition={{ duration: 1.4, repeat: Number.POSITIVE_INFINITY, ease: 'linear' }}
-											className='absolute left-3 right-3 h-0.5 bg-[var(--color-seller-accent)] shadow-lg'
-											style={{ boxShadow: '0 0 8px 2px var(--color-seller-accent)' }}
-										/>
+								{/* Camera viewfinder */}
+								<div className='relative mx-auto w-52 h-52 mb-5 rounded-[var(--radius-xl)] overflow-hidden bg-black border-2 border-[var(--color-seller-border)] flex items-center justify-center'>
+									{cameraError ? (
+										<div className='flex flex-col items-center gap-2 p-4 text-center'>
+											<CameraOff size={32} className='text-[var(--color-error)]' />
+											<p className='text-xs text-white'>{cameraError}</p>
+										</div>
+									) : (
+										<>
+											<video
+												ref={videoRef}
+												className='w-full h-full object-cover'
+												muted
+												playsInline
+											/>
+											{/* scan line animation */}
+											<motion.div
+												animate={{ top: ['10%', '85%', '10%'] }}
+												transition={{ duration: 1.8, repeat: Number.POSITIVE_INFINITY, ease: 'linear' }}
+												className='absolute left-3 right-3 h-0.5 bg-[var(--color-seller-accent)] pointer-events-none'
+												style={{ boxShadow: '0 0 8px 2px var(--color-seller-accent)' }}
+											/>
+											{/* corner brackets */}
+											<div className='absolute top-3 left-3 w-6 h-6 border-t-2 border-l-2 border-[var(--color-seller-accent)] rounded-tl-sm pointer-events-none' />
+											<div className='absolute top-3 right-3 w-6 h-6 border-t-2 border-r-2 border-[var(--color-seller-accent)] rounded-tr-sm pointer-events-none' />
+											<div className='absolute bottom-3 left-3 w-6 h-6 border-b-2 border-l-2 border-[var(--color-seller-accent)] rounded-bl-sm pointer-events-none' />
+											<div className='absolute bottom-3 right-3 w-6 h-6 border-b-2 border-r-2 border-[var(--color-seller-accent)] rounded-br-sm pointer-events-none' />
+										</>
 									)}
 								</div>
 
 								<p className='text-center text-xs text-[var(--color-seller-text-muted)] mb-5'>
-									Ask the customer to show their QR code, then tap to verify pickup.
+									{cameraError
+										? 'Camera access denied. Grant permission and retry.'
+										: 'Point the camera at the customer\'s QR code to verify pickup.'}
 								</p>
 
-								{/* Customer info strip */}
 								<div className='flex items-center gap-3 p-3 bg-[var(--color-seller-surface-elevated)] rounded-[var(--radius-lg)] mb-4'>
 									<Avatar className='w-9 h-9 flex-shrink-0'>
 										<AvatarImage src={order.customer.avatar} />
@@ -247,21 +300,19 @@ function QRScannerModal({ order, onClose, onVerified }: QRScannerProps) {
 									</div>
 								</div>
 
-								<Button
-									className='w-full gap-2 bg-[var(--color-seller-accent)] hover:bg-[var(--color-seller-accent-hover)] text-white'
-									onClick={handleSimulateScan}
-									disabled={scanning}
-								>
-									{scanning ? (
-										<>
-											<RefreshCw size={15} className='animate-spin' /> Scanning...
-										</>
-									) : (
-										<>
-											<ScanLine size={15} /> Verify Customer QR
-										</>
-									)}
-								</Button>
+								{cameraError ? (
+									<Button
+										className='w-full gap-2 bg-[var(--color-seller-accent)] hover:bg-[var(--color-seller-accent-hover)] text-white'
+										onClick={handleRetry}
+									>
+										<Camera size={15} /> Retry Camera
+									</Button>
+								) : (
+									<div className='flex items-center justify-center gap-1.5 text-xs text-[var(--color-seller-text-muted)]'>
+										<ScanLine size={13} className='animate-pulse text-[var(--color-seller-accent)]' />
+										Scanning automatically…
+									</div>
+								)}
 							</>
 						)}
 
@@ -300,6 +351,31 @@ function QRScannerModal({ order, onClose, onVerified }: QRScannerProps) {
 								</Button>
 							</motion.div>
 						)}
+
+						{step === 'error' && (
+							<motion.div
+								initial={{ scale: 0.9, opacity: 0 }}
+								animate={{ scale: 1, opacity: 1 }}
+								className='flex flex-col items-center gap-4 py-4 text-center'
+							>
+								<div className='w-16 h-16 rounded-full bg-[var(--color-error-light)] flex items-center justify-center'>
+									<XCircle size={32} className='text-[var(--color-error)]' />
+								</div>
+								<div>
+									<h3 className='text-lg font-bold font-[var(--font-display)] text-[var(--color-seller-text-primary)]'>
+										Scan Failed
+									</h3>
+									<p className='text-sm text-[var(--color-seller-text-muted)] mt-1'>{errorMsg}</p>
+								</div>
+								<Button
+									variant='outline'
+									className='w-full gap-2 border-[var(--color-seller-border)]'
+									onClick={handleRetry}
+								>
+									<RefreshCw size={15} /> Try Again
+								</Button>
+							</motion.div>
+						)}
 					</div>
 				</motion.div>
 			</motion.div>
@@ -313,16 +389,16 @@ function QRScannerModal({ order, onClose, onVerified }: QRScannerProps) {
 interface OrderCardProps {
 	order: SellerOrder
 	onQRScan: (order: SellerOrder) => void
+	onStatusUpdate: (id: string, status: SellerOrderStatus) => void
+	isPending: boolean
 }
 
-function OrderCard({ order, onQRScan }: OrderCardProps) {
-	const { updateOrderStatus } = useSellerStore()
+function OrderCard({ order, onQRScan, onStatusUpdate, isPending }: OrderCardProps) {
 	const navigate = useNavigate()
 	const cfg = STATUS_CONFIG[order.status]
 	const nextAction = NEXT_ACTION[order.status]
-	const minsToPickup = Math.floor(
-		(new Date(order.pickupTime).getTime() - Date.now()) / 60000,
-	)
+	const pickupMs = new Date(order.pickupTime).getTime()
+	const minsToPickup = Math.floor((pickupMs - Date.now()) / 60000)
 	const isOverdue = minsToPickup < 0 && order.status !== 'completed' && order.status !== 'cancelled'
 	const isUrgent = minsToPickup > 0 && minsToPickup < 30
 
@@ -337,28 +413,19 @@ function OrderCard({ order, onQRScan }: OrderCardProps) {
 				onClick={() => navigate(`/seller/orders/${order.id}`)}
 			>
 				<CardContent className='p-3.5'>
-					{/* Top row: order number + status + time */}
+					{/* Top row */}
 					<div className='flex items-start justify-between gap-2 mb-2.5'>
 						<div className='flex items-center gap-2 min-w-0'>
-							<span
-								className={cn(
-									'w-2 h-2 rounded-full flex-shrink-0',
-									cfg.dotColor,
-								)}
-							/>
+							<span className={cn('w-2 h-2 rounded-full flex-shrink-0', cfg.dotColor)} />
 							<span className='text-xs font-mono font-semibold text-[var(--color-seller-text-muted)] truncate'>
 								{order.orderNumber}
 							</span>
 						</div>
 						<div className='flex items-center gap-2 flex-shrink-0'>
-							<span
-								className={cn(
-									'flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border',
-									cfg.color,
-									cfg.bg,
-									cfg.border,
-								)}
-							>
+							<span className={cn(
+								'flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border',
+								cfg.color, cfg.bg, cfg.border,
+							)}>
 								{cfg.icon}
 								{cfg.shortLabel}
 							</span>
@@ -368,7 +435,7 @@ function OrderCard({ order, onQRScan }: OrderCardProps) {
 						</div>
 					</div>
 
-					{/* Customer + amount row */}
+					{/* Customer + amount */}
 					<div className='flex items-center gap-3 mb-2.5'>
 						<Avatar className='w-9 h-9 flex-shrink-0'>
 							<AvatarImage src={order.customer.avatar} alt={order.customer.name} />
@@ -401,18 +468,12 @@ function OrderCard({ order, onQRScan }: OrderCardProps) {
 						</div>
 					</div>
 
-					{/* Pickup time row */}
+					{/* Pickup time */}
 					<div className='flex items-center justify-between gap-2 mb-2.5'>
-						<div
-							className={cn(
-								'flex items-center gap-1.5 text-xs font-medium',
-								isOverdue
-									? 'text-[var(--color-error)]'
-									: isUrgent
-										? 'text-[var(--color-warning)]'
-										: 'text-[var(--color-seller-text-muted)]',
-							)}
-						>
+						<div className={cn(
+							'flex items-center gap-1.5 text-xs font-medium',
+							isOverdue ? 'text-[var(--color-error)]' : isUrgent ? 'text-[var(--color-warning)]' : 'text-[var(--color-seller-text-muted)]',
+						)}>
 							<Clock size={12} />
 							{isOverdue ? (
 								<span>Overdue · pickup was {formatPickupTime(new Date(order.pickupTime))}</span>
@@ -433,24 +494,25 @@ function OrderCard({ order, onQRScan }: OrderCardProps) {
 					{/* Customer note */}
 					{order.customerNote && (
 						<div className='mb-2.5 px-2.5 py-2 bg-[var(--color-seller-surface-elevated)] rounded-[var(--radius-md)] text-xs text-[var(--color-seller-text-muted)] flex items-start gap-1.5'>
-							<MessageSquare size={13} className='mt-0.5 flex-shrink-0 text-[var(--color-seller-text-muted)]' />
+							<MessageSquare size={13} className='mt-0.5 flex-shrink-0' />
 							<span className='italic line-clamp-1'>{order.customerNote}</span>
 						</div>
 					)}
 
-					{/* Actions row */}
+					{/* Actions */}
 					{order.status !== 'cancelled' && order.status !== 'completed' && (
 						<div className='flex items-center gap-2' onClick={(e) => e.stopPropagation()}>
 							{nextAction && (
 								<button
 									type='button'
-									onClick={() => updateOrderStatus(order.id, nextAction.next)}
+									disabled={isPending}
+									onClick={() => onStatusUpdate(order.id, nextAction.next)}
 									className={cn(
-										'flex-1 flex items-center justify-center gap-1.5 text-xs font-bold h-8 rounded-[var(--radius-md)] transition-colors',
+										'flex-1 flex items-center justify-center gap-1.5 text-xs font-bold h-8 rounded-[var(--radius-md)] transition-colors disabled:opacity-60',
 										nextAction.color,
 									)}
 								>
-									<Check size={13} />
+									{isPending ? <Loader2 size={13} className='animate-spin' /> : <Check size={13} />}
 									{nextAction.label}
 								</button>
 							)}
@@ -467,8 +529,9 @@ function OrderCard({ order, onQRScan }: OrderCardProps) {
 							{order.status === 'pending' && (
 								<button
 									type='button'
-									onClick={() => updateOrderStatus(order.id, 'cancelled')}
-									className='flex items-center justify-center gap-1.5 text-xs font-medium h-8 px-3 rounded-[var(--radius-md)] text-[var(--color-error)] hover:bg-[var(--color-error-light)] transition-colors'
+									disabled={isPending}
+									onClick={() => onStatusUpdate(order.id, 'cancelled')}
+									className='flex items-center justify-center gap-1.5 text-xs font-medium h-8 px-3 rounded-[var(--radius-md)] text-[var(--color-error)] hover:bg-[var(--color-error-light)] transition-colors disabled:opacity-60'
 								>
 									<X size={13} />
 									Reject
@@ -486,11 +549,27 @@ function OrderCard({ order, onQRScan }: OrderCardProps) {
 // Orders List Page
 // ─────────────────────────────────────────────────────────────
 export function SellerOrdersPage() {
-	const { orders } = useSellerStore()
 	const [activeTab, setActiveTab] = useState<SellerOrderStatus | 'all'>('all')
 	const [search, setSearch] = useState('')
 	const [qrOrder, setQrOrder] = useState<SellerOrder | null>(null)
-	const { updateOrderStatus } = useSellerStore()
+	const queryClient = useQueryClient()
+
+	const { data: orders = [], isLoading, isFetching, refetch } = useQuery({
+		queryKey: ['seller-orders'],
+		queryFn: async () => {
+			const { data } = await sellerApi.listOrders({ limit: 200 })
+			return data.map(mapSellerOrderOutToSellerOrder)
+		},
+		refetchInterval: 30_000, // poll every 30s for new orders
+	})
+
+	const { mutate: updateStatus, isPending: isUpdating, variables: updatingVars } = useMutation({
+		mutationFn: ({ id, status }: { id: string; status: SellerOrderStatus }) =>
+			sellerApi.updateOrderStatus(id, { status }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['seller-orders'] })
+		},
+	})
 
 	const filtered = orders.filter((o) => {
 		const matchesTab = activeTab === 'all' || o.status === activeTab
@@ -502,7 +581,6 @@ export function SellerOrdersPage() {
 		return matchesTab && matchesSearch
 	})
 
-	// Sort: active first, then newest
 	const sorted = [...filtered].sort((a, b) => {
 		const activePriority: SellerOrderStatus[] = ['pending', 'ready_for_pickup', 'confirmed', 'preparing']
 		const aActive = activePriority.includes(a.status)
@@ -512,7 +590,6 @@ export function SellerOrdersPage() {
 		return new Date(b.placedAt).getTime() - new Date(a.placedAt).getTime()
 	})
 
-	// Counts for tabs
 	const counts = STATUS_TABS.reduce<Record<string, number>>((acc, tab) => {
 		acc[tab.value] =
 			tab.value === 'all'
@@ -521,7 +598,6 @@ export function SellerOrdersPage() {
 		return acc
 	}, {})
 
-	// Summary stats (today)
 	const todayRevenue = orders
 		.filter((o) => o.status === 'completed')
 		.reduce((s, o) => s + o.totalAmount, 0)
@@ -538,31 +614,41 @@ export function SellerOrdersPage() {
 				animate='visible'
 				className='space-y-5 pb-8'
 			>
-				{/* ── Header ── */}
+				{/* Header */}
 				<motion.div variants={slideUp} className='flex items-start justify-between gap-3'>
 					<div>
 						<h1 className='text-2xl font-bold font-[var(--font-display)] text-[var(--color-seller-text-primary)]'>
 							Orders
 						</h1>
 						<p className='text-sm text-[var(--color-seller-text-muted)] mt-0.5'>
-							{activeCount} active · {orders.length} total today
+							{isLoading ? '...' : `${activeCount} active · ${orders.length} total`}
 						</p>
 					</div>
-					{pendingCount > 0 && (
-						<div className='flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-warning-light)] rounded-full border border-[var(--color-warning)]/30'>
-							<span className='w-2 h-2 rounded-full bg-[var(--color-warning)] animate-pulse' />
-							<span className='text-xs font-bold text-[var(--color-warning)]'>
-								{pendingCount} need action
-							</span>
-						</div>
-					)}
+					<div className='flex items-center gap-2 flex-shrink-0'>
+						{pendingCount > 0 && (
+							<div className='flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-warning-light)] rounded-full border border-[var(--color-warning)]/30'>
+								<span className='w-2 h-2 rounded-full bg-[var(--color-warning)] animate-pulse' />
+								<span className='text-xs font-bold text-[var(--color-warning)]'>
+									{pendingCount} need action
+								</span>
+							</div>
+						)}
+						<button
+							type='button'
+							onClick={() => refetch()}
+							disabled={isFetching}
+							className='p-2 rounded-[var(--radius-md)] text-[var(--color-seller-text-muted)] hover:bg-[var(--color-seller-surface-elevated)] border border-[var(--color-seller-border)] transition-colors disabled:opacity-50'
+						>
+							<RefreshCw size={14} className={cn(isFetching && 'animate-spin')} />
+						</button>
+					</div>
 				</motion.div>
 
-				{/* ── Summary stats strip ── */}
+				{/* Summary stats */}
 				<motion.div variants={slideUp} className='grid grid-cols-3 gap-2'>
 					{[
 						{
-							label: 'Today\'s Revenue',
+							label: "Today's Revenue",
 							value: formatCurrency(todayRevenue),
 							color: 'text-[var(--color-seller-accent)]',
 							bg: 'bg-[var(--color-seller-accent-light)]',
@@ -580,29 +666,16 @@ export function SellerOrdersPage() {
 							bg: 'bg-[var(--color-success-light)]',
 						},
 					].map((s) => (
-						<div
-							key={s.label}
-							className={cn(
-								'rounded-[var(--radius-lg)] p-3 text-center',
-								s.bg,
-							)}
-						>
-							<p className={cn('text-lg font-bold font-[var(--font-display)]', s.color)}>
-								{s.value}
-							</p>
-							<p className='text-[10px] text-[var(--color-seller-text-muted)] mt-0.5 leading-tight'>
-								{s.label}
-							</p>
+						<div key={s.label} className={cn('rounded-[var(--radius-lg)] p-3 text-center', s.bg)}>
+							<p className={cn('text-lg font-bold font-[var(--font-display)]', s.color)}>{s.value}</p>
+							<p className='text-[10px] text-[var(--color-seller-text-muted)] mt-0.5 leading-tight'>{s.label}</p>
 						</div>
 					))}
 				</motion.div>
 
-				{/* ── Search ── */}
+				{/* Search */}
 				<motion.div variants={slideUp} className='relative'>
-					<Search
-						size={15}
-						className='absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-seller-text-muted)]'
-					/>
+					<Search size={15} className='absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-seller-text-muted)]' />
 					<input
 						type='text'
 						placeholder='Search by order #, customer, item...'
@@ -614,14 +687,14 @@ export function SellerOrdersPage() {
 						<button
 							type='button'
 							onClick={() => setSearch('')}
-							className='absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-seller-text-muted)] hover:text-[var(--color-seller-text-primary)] transition-colors'
+							className='absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-seller-text-muted)] hover:text-[var(--color-seller-text-primary)]'
 						>
 							<X size={14} />
 						</button>
 					)}
 				</motion.div>
 
-				{/* ── Status tabs (scrollable pill row) ── */}
+				{/* Status tabs */}
 				<motion.div variants={slideUp} className='flex gap-2 overflow-x-auto no-scrollbar pb-1'>
 					{STATUS_TABS.map((tab) => {
 						const count = counts[tab.value] ?? 0
@@ -639,14 +712,12 @@ export function SellerOrdersPage() {
 							>
 								{tab.label}
 								{count > 0 && (
-									<span
-										className={cn(
-											'w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-bold',
-											activeTab === tab.value
-												? 'bg-white/20 text-white'
-												: 'bg-[var(--color-seller-surface-elevated)] text-[var(--color-seller-text-muted)]',
-										)}
-									>
+									<span className={cn(
+										'w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-bold',
+										activeTab === tab.value
+											? 'bg-white/20 text-white'
+											: 'bg-[var(--color-seller-surface-elevated)] text-[var(--color-seller-text-muted)]',
+									)}>
 										{count}
 									</span>
 								)}
@@ -655,12 +726,13 @@ export function SellerOrdersPage() {
 					})}
 				</motion.div>
 
-				{/* ── Orders list ── */}
-				{sorted.length === 0 ? (
-					<motion.div
-						variants={scaleIn}
-						className='flex flex-col items-center gap-3 py-16 text-center'
-					>
+				{/* Orders list */}
+				{isLoading ? (
+					<motion.div variants={fadeIn} className='flex items-center justify-center py-16'>
+						<Loader2 size={28} className='animate-spin text-[var(--color-seller-accent)]' />
+					</motion.div>
+				) : sorted.length === 0 ? (
+					<motion.div variants={scaleIn} className='flex flex-col items-center gap-3 py-16 text-center'>
 						<div className='w-14 h-14 rounded-2xl bg-[var(--color-seller-surface-elevated)] flex items-center justify-center'>
 							<ShoppingBag size={24} className='text-[var(--color-seller-text-muted)]' />
 						</div>
@@ -678,6 +750,8 @@ export function SellerOrdersPage() {
 								key={order.id}
 								order={order}
 								onQRScan={setQrOrder}
+								onStatusUpdate={(id, status) => updateStatus({ id, status })}
+								isPending={isUpdating && updatingVars?.id === order.id}
 							/>
 						))}
 					</motion.div>
@@ -686,13 +760,12 @@ export function SellerOrdersPage() {
 				<div className='h-4' />
 			</motion.div>
 
-			{/* QR Scanner Modal */}
 			{qrOrder && (
 				<QRScannerModal
 					order={qrOrder}
 					onClose={() => setQrOrder(null)}
 					onVerified={() => {
-						updateOrderStatus(qrOrder.id, 'completed')
+						updateStatus({ id: qrOrder.id, status: 'completed' })
 						setQrOrder(null)
 					}}
 				/>
@@ -729,19 +802,41 @@ const STATUS_STEP_INDEX: Partial<Record<SellerOrderStatus, number>> = {
 export function SellerOrderDetailPage() {
 	const { orderId } = useParams<{ orderId: string }>()
 	const navigate = useNavigate()
-	const { orders, updateOrderStatus } = useSellerStore()
 	const [qrOpen, setQrOpen] = useState(false)
 	const [cancelConfirm, setCancelConfirm] = useState(false)
+	const queryClient = useQueryClient()
 
-	const order = orders.find((o) => o.id === orderId)
+	const { data: order, isLoading } = useQuery({
+		queryKey: ['seller-order', orderId],
+		queryFn: async () => {
+			const { data } = await sellerApi.getOrderById(orderId!)
+			return mapSellerOrderOutToSellerOrder(data)
+		},
+		enabled: !!orderId,
+	})
+
+	const { mutate: updateStatus, isPending: isUpdating } = useMutation({
+		mutationFn: ({ status, cancelReason }: { status: SellerOrderStatus; cancelReason?: string }) =>
+			sellerApi.updateOrderStatus(orderId!, { status, cancel_reason: cancelReason }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['seller-order', orderId] })
+			queryClient.invalidateQueries({ queryKey: ['seller-orders'] })
+		},
+	})
+
+	if (isLoading) {
+		return (
+			<div className='flex items-center justify-center py-20'>
+				<Loader2 size={28} className='animate-spin text-[var(--color-seller-accent)]' />
+			</div>
+		)
+	}
 
 	if (!order) {
 		return (
 			<div className='flex flex-col items-center gap-4 py-20 text-center'>
 				<AlertTriangle size={32} className='text-[var(--color-warning)]' />
-				<p className='text-base font-semibold text-[var(--color-seller-text-primary)]'>
-					Order not found
-				</p>
+				<p className='text-base font-semibold text-[var(--color-seller-text-primary)]'>Order not found</p>
 				<Button
 					variant='outline'
 					onClick={() => navigate('/seller/orders')}
@@ -757,9 +852,7 @@ export function SellerOrderDetailPage() {
 	const nextAction = NEXT_ACTION[order.status]
 	const currentStep = STATUS_STEP_INDEX[order.status] ?? (order.status === 'cancelled' ? -1 : 3)
 	const isCancelledOrDone = order.status === 'completed' || order.status === 'cancelled'
-	const minsToPickup = Math.floor(
-		(new Date(order.pickupTime).getTime() - Date.now()) / 60000,
-	)
+	const minsToPickup = Math.floor((new Date(order.pickupTime).getTime() - Date.now()) / 60000)
 
 	return (
 		<>
@@ -769,7 +862,7 @@ export function SellerOrderDetailPage() {
 				animate='visible'
 				className='space-y-5 pb-8'
 			>
-				{/* ── Back + header ── */}
+				{/* Back + header */}
 				<motion.div variants={slideUp}>
 					<button
 						type='button'
@@ -787,19 +880,17 @@ export function SellerOrderDetailPage() {
 								Placed {formatRelativeTime(new Date(order.placedAt))}
 							</p>
 						</div>
-						<span
-							className={cn(
-								'flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border',
-								cfg.color, cfg.bg, cfg.border,
-							)}
-						>
+						<span className={cn(
+							'flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border',
+							cfg.color, cfg.bg, cfg.border,
+						)}>
 							{cfg.icon}
 							{cfg.label}
 						</span>
 					</div>
 				</motion.div>
 
-				{/* ── Status Timeline ── */}
+				{/* Status Timeline */}
 				{order.status !== 'cancelled' && (
 					<motion.div variants={slideUp}>
 						<Card className='border-[var(--color-seller-border)] shadow-none'>
@@ -812,43 +903,32 @@ export function SellerOrderDetailPage() {
 
 										return (
 											<div key={step.status} className='flex items-center flex-1'>
-												{/* Step circle */}
 												<div className='flex flex-col items-center'>
-													<div
-														className={cn(
-															'w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300',
-															isDone
-																? 'bg-[var(--color-success)] text-white'
-																: isActive
-																	? 'bg-[var(--color-seller-accent)] text-white ring-4 ring-[var(--color-seller-accent)]/20'
-																	: 'bg-[var(--color-seller-surface-elevated)] text-[var(--color-seller-text-muted)]',
-														)}
-													>
+													<div className={cn(
+														'w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300',
+														isDone
+															? 'bg-[var(--color-success)] text-white'
+															: isActive
+																? 'bg-[var(--color-seller-accent)] text-white ring-4 ring-[var(--color-seller-accent)]/20'
+																: 'bg-[var(--color-seller-surface-elevated)] text-[var(--color-seller-text-muted)]',
+													)}>
 														{isDone ? <Check size={14} /> : step.icon}
 													</div>
-													<p
-														className={cn(
-															'text-[9px] font-semibold mt-1 text-center whitespace-nowrap',
-															isDone || isActive
-																? 'text-[var(--color-seller-text-primary)]'
-																: 'text-[var(--color-seller-text-muted)]',
-														)}
-													>
+													<p className={cn(
+														'text-[9px] font-semibold mt-1 text-center whitespace-nowrap',
+														isDone || isActive
+															? 'text-[var(--color-seller-text-primary)]'
+															: 'text-[var(--color-seller-text-muted)]',
+													)}>
 														{step.label}
 													</p>
 												</div>
-
-												{/* Connector line */}
 												{!isLast && (
 													<div className='flex-1 mx-1 mb-4'>
-														<div
-															className={cn(
-																'h-0.5 w-full rounded-full transition-all duration-300',
-																i < currentStep
-																	? 'bg-[var(--color-success)]'
-																	: 'bg-[var(--color-seller-border)]',
-															)}
-														/>
+														<div className={cn(
+															'h-0.5 w-full rounded-full transition-all duration-300',
+															i < currentStep ? 'bg-[var(--color-success)]' : 'bg-[var(--color-seller-border)]',
+														)} />
 													</div>
 												)}
 											</div>
@@ -860,7 +940,7 @@ export function SellerOrderDetailPage() {
 					</motion.div>
 				)}
 
-				{/* ── Pickup urgency alert ── */}
+				{/* Pickup urgency alert */}
 				{!isCancelledOrDone && minsToPickup > 0 && minsToPickup < 30 && (
 					<motion.div
 						variants={slideUp}
@@ -873,7 +953,7 @@ export function SellerOrderDetailPage() {
 					</motion.div>
 				)}
 
-				{/* ── Customer Info ── */}
+				{/* Customer Info */}
 				<motion.div variants={slideUp}>
 					<Card className='border-[var(--color-seller-border)] shadow-none'>
 						<CardContent className='p-4'>
@@ -892,7 +972,7 @@ export function SellerOrderDetailPage() {
 										{order.customer.name}
 									</p>
 									<p className='text-xs text-[var(--color-seller-text-muted)] mt-0.5'>
-										{order.customer.totalOrdersWithSeller} order{order.customer.totalOrdersWithSeller > 1 ? 's' : ''} with your store
+										{order.customer.totalOrdersWithSeller} order{order.customer.totalOrdersWithSeller !== 1 ? 's' : ''} with your store
 									</p>
 								</div>
 								{order.customer.phone && (
@@ -914,7 +994,7 @@ export function SellerOrderDetailPage() {
 					</Card>
 				</motion.div>
 
-				{/* ── Order Items ── */}
+				{/* Order Items */}
 				<motion.div variants={slideUp}>
 					<Card className='border-[var(--color-seller-border)] shadow-none'>
 						<CardContent className='p-4'>
@@ -949,8 +1029,6 @@ export function SellerOrderDetailPage() {
 									</div>
 								))}
 							</div>
-
-							{/* Total */}
 							<div className='mt-4 pt-3 border-t border-[var(--color-seller-border-subtle)] flex items-center justify-between'>
 								<span className='text-sm font-bold text-[var(--color-seller-text-primary)]'>Total</span>
 								<span className='text-lg font-bold font-[var(--font-display)] text-[var(--color-seller-accent)]'>
@@ -961,7 +1039,7 @@ export function SellerOrderDetailPage() {
 					</Card>
 				</motion.div>
 
-				{/* ── Pickup Details ── */}
+				{/* Pickup Details */}
 				<motion.div variants={slideUp}>
 					<Card className='border-[var(--color-seller-border)] shadow-none'>
 						<CardContent className='p-4'>
@@ -987,7 +1065,6 @@ export function SellerOrderDetailPage() {
 								</div>
 							</div>
 
-							{/* QR Code display */}
 							<div className='mt-3 pt-3 border-t border-[var(--color-seller-border-subtle)]'>
 								<p className='text-xs text-[var(--color-seller-text-muted)] mb-2'>Order QR Code</p>
 								<div className='flex items-center gap-3'>
@@ -1008,7 +1085,7 @@ export function SellerOrderDetailPage() {
 					</Card>
 				</motion.div>
 
-				{/* ── Timestamps ── */}
+				{/* Timestamps */}
 				<motion.div variants={slideUp}>
 					<Card className='border-[var(--color-seller-border)] shadow-none'>
 						<CardContent className='p-4'>
@@ -1018,7 +1095,7 @@ export function SellerOrderDetailPage() {
 							<div className='space-y-2'>
 								{[
 									{ label: 'Order placed', time: order.placedAt, show: true },
-									{ label: 'Confirmed', time: order.confirmedAt, show: !!order.confirmedAt },
+									{ label: 'Last updated', time: order.updatedAt, show: order.updatedAt !== order.placedAt },
 									{ label: 'Completed', time: order.completedAt, show: !!order.completedAt },
 								]
 									.filter((t) => t.show)
@@ -1043,30 +1120,27 @@ export function SellerOrderDetailPage() {
 					</Card>
 				</motion.div>
 
-				{/* ── Action Buttons ── */}
+				{/* Action Buttons */}
 				{!isCancelledOrDone && (
 					<motion.div variants={slideUp} className='space-y-2'>
 						{nextAction && (
 							<Button
-								className={cn(
-									'w-full h-12 text-base font-bold gap-2',
-									nextAction.color,
-								)}
-								onClick={() => updateOrderStatus(order.id, nextAction.next)}
+								className={cn('w-full h-12 text-base font-bold gap-2', nextAction.color)}
+								disabled={isUpdating}
+								onClick={() => updateStatus({ status: nextAction.next })}
 							>
-								<Check size={18} />
+								{isUpdating ? <Loader2 size={18} className='animate-spin' /> : <Check size={18} />}
 								{nextAction.label}
 							</Button>
 						)}
 
 						{order.status === 'ready_for_pickup' && (
 							<Button
-								variant='outline'
-								className='w-full gap-2 border-[var(--color-seller-border)] text-[var(--color-seller-text-secondary)]'
+								className='w-full h-12 text-base font-bold gap-2 bg-[var(--color-seller-accent)] hover:bg-[var(--color-seller-accent-hover)] text-white'
 								onClick={() => setQrOpen(true)}
 							>
-								<QrCode size={16} />
-								Verify Customer QR
+								<QrCode size={18} />
+								Scan QR to Complete
 							</Button>
 						)}
 
@@ -1090,9 +1164,12 @@ export function SellerOrderDetailPage() {
 								<Button
 									variant='destructive'
 									className='flex-1 gap-1.5'
+									disabled={isUpdating}
 									onClick={() => {
-										updateOrderStatus(order.id, 'cancelled')
-										navigate('/seller/orders')
+										updateStatus(
+											{ status: 'cancelled', cancelReason: 'Cancelled by seller' },
+											{ onSuccess: () => navigate('/seller/orders') },
+										)
 									}}
 								>
 									<XCircle size={14} /> Confirm Cancel
@@ -1105,13 +1182,12 @@ export function SellerOrderDetailPage() {
 				<div className='h-4' />
 			</motion.div>
 
-			{/* QR Scanner Modal */}
 			{qrOpen && (
 				<QRScannerModal
 					order={order}
 					onClose={() => setQrOpen(false)}
 					onVerified={() => {
-						updateOrderStatus(order.id, 'completed')
+						updateStatus({ status: 'completed' })
 						setQrOpen(false)
 					}}
 				/>

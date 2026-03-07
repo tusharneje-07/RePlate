@@ -34,7 +34,8 @@ function getExpiryLabel(expiresAt: string): { label: string; urgent: boolean } {
 	return { label: `${hrs}h left`, urgent: false }
 }
 
-function getPickupLabel(pickupStart: string, pickupEnd: string): string {
+function getPickupLabel(pickupStart: string | null, pickupEnd: string | null): string {
+	if (!pickupStart || !pickupEnd) return 'See store hours'
 	const fmt = (d: Date) =>
 		d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })
 	return `${fmt(new Date(pickupStart))} – ${fmt(new Date(pickupEnd))}`

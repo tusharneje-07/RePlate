@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { consumerApi, uploadFile } from '@/lib/api'
 import { motion, AnimatePresence } from 'motion/react'
 import {
 	Leaf,
@@ -18,6 +19,8 @@ import {
 	CalendarClock,
 	Info,
 	AlertTriangle,
+	X,
+	ImagePlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -51,6 +54,7 @@ interface ListingForm {
 	packagingCondition: PackagingCondition | ''
 	notes: string
 	hygieneConfirmed: boolean
+	images: string[]
 }
 
 const initialForm: ListingForm = {
@@ -69,6 +73,7 @@ const initialForm: ListingForm = {
 	packagingCondition: '',
 	notes: '',
 	hygieneConfirmed: false,
+	images: [],
 }
 
 // ── Option helpers ────────────────────────────────────────
@@ -477,28 +482,82 @@ function Step4({
 	form,
 	update,
 	updateBool,
+	updateImages,
 	onSubmit,
+	submitting,
+	submitError,
+	onPickPhoto,
+	uploading,
+	uploadError,
 }: {
 	form: ListingForm
 	update: (k: keyof ListingForm, v: string) => void
 	updateBool: (k: keyof ListingForm, v: boolean) => void
+	updateImages: (urls: string[]) => void
 	onSubmit: () => void
+	submitting?: boolean
+	submitError?: string | null
+	onPickPhoto: () => void
+	uploading: boolean
+	uploadError: string | null
 }) {
+	function removeImage(url: string) {
+		updateImages(form.images.filter((u) => u !== url))
+	}
+
 	return (
 		<motion.div variants={staggerContainer} initial='hidden' animate='visible' className='space-y-5'>
-			{/* Optional photo section */}
+			{/* Photo upload section */}
 			<motion.div variants={slideUp}>
 				<FieldLabel label='Food Photos (Optional)' as='p' />
-				<button
-					type='button'
-					className='w-full flex flex-col items-center justify-center gap-3 p-6 rounded-[var(--radius-lg)] border-2 border-dashed border-[var(--color-border)] hover:border-[var(--color-brand-accent)] hover:bg-[var(--color-brand-accent-light)] transition-all duration-150 text-[var(--color-text-muted)] hover:text-[var(--color-brand-accent)]'
-				>
-					<Camera size={24} />
-					<div className='text-center'>
-						<p className='text-sm font-semibold'>Tap to add photos</p>
-						<p className='text-xs mt-0.5'>Helps NGOs know what to expect</p>
+
+				{/* Preview grid + add button */}
+				{form.images.length > 0 ? (
+					<div className='grid grid-cols-4 gap-2'>
+						{form.images.map((url) => (
+							<div key={url} className='relative aspect-square rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-border)]'>
+								<img src={url} alt='Food photo' className='w-full h-full object-cover' />
+								<button
+									type='button'
+									onClick={() => removeImage(url)}
+									className='absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80 transition-colors'
+								>
+									<X size={10} />
+								</button>
+							</div>
+						))}
+						{form.images.length < 4 && (
+							<button
+								type='button'
+								onClick={onPickPhoto}
+								disabled={uploading}
+								className='aspect-square rounded-[var(--radius-md)] border-2 border-dashed border-[var(--color-border)] hover:border-[var(--color-brand-accent)] hover:bg-[var(--color-brand-accent-light)] flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-brand-accent)] transition-all duration-150 disabled:opacity-50'
+							>
+								<ImagePlus size={20} />
+							</button>
+						)}
 					</div>
-				</button>
+				) : (
+					<button
+						type='button'
+						onClick={onPickPhoto}
+						disabled={uploading}
+						className='w-full flex flex-col items-center justify-center gap-3 p-6 rounded-[var(--radius-lg)] border-2 border-dashed border-[var(--color-border)] hover:border-[var(--color-brand-accent)] hover:bg-[var(--color-brand-accent-light)] transition-all duration-150 text-[var(--color-text-muted)] hover:text-[var(--color-brand-accent)] disabled:opacity-50'
+					>
+						<Camera size={24} />
+						<div className='text-center'>
+							<p className='text-sm font-semibold'>{uploading ? 'Uploading…' : 'Tap to add photos'}</p>
+							<p className='text-xs mt-0.5'>Up to 4 photos · Helps NGOs know what to expect</p>
+						</div>
+					</button>
+				)}
+
+				{uploading && (
+					<p className='text-xs text-[var(--color-brand-accent)] mt-1.5 text-center'>Uploading photo…</p>
+				)}
+				{uploadError && (
+					<p className='text-xs text-red-500 mt-1.5'>{uploadError}</p>
+				)}
 			</motion.div>
 
 			{/* Special notes */}
@@ -580,13 +639,16 @@ function Step4({
 			<motion.div variants={slideUp}>
 				<Button
 					onClick={onSubmit}
-					disabled={!form.hygieneConfirmed}
+					disabled={!form.hygieneConfirmed || submitting}
 					size='lg'
 					className='w-full gap-2 bg-[var(--color-brand-accent)] hover:bg-[var(--color-brand-accent-hover)] text-white disabled:opacity-40 disabled:cursor-not-allowed'
 				>
 					<Leaf size={16} />
-					Submit Surplus Listing
+					{submitting ? 'Submitting...' : 'Submit Surplus Listing'}
 				</Button>
+				{submitError && (
+					<p className='text-xs text-red-500 text-center mt-2'>{submitError}</p>
+				)}
 				<p className='text-[11px] text-[var(--color-text-muted)] text-center mt-2'>
 					Nearby NGOs will be notified instantly
 				</p>
@@ -651,7 +713,38 @@ export function ListFoodPage() {
 	const navigate = useNavigate()
 	const [step, setStep] = useState(1)
 	const [submitted, setSubmitted] = useState(false)
+	const [submitting, setSubmitting] = useState(false)
+	const [submitError, setSubmitError] = useState<string | null>(null)
 	const [form, setForm] = useState<ListingForm>(initialForm)
+
+	// ── Photo upload state — hoisted outside AnimatePresence so the
+	//    native <input type="file"> ref always stays mounted in the DOM
+	const fileInputRef = useRef<HTMLInputElement>(null)
+	const [uploading, setUploading] = useState(false)
+	const [uploadError, setUploadError] = useState<string | null>(null)
+
+	const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const files = Array.from(e.target.files ?? [])
+		if (files.length === 0) return
+		const remaining = 4 - form.images.length
+		const toUpload = files.slice(0, remaining)
+		if (toUpload.length === 0) return
+		setUploading(true)
+		setUploadError(null)
+		try {
+			const uploaded = await Promise.all(toUpload.map((f) => uploadFile(f)))
+			setForm((prev) => ({ ...prev, images: [...prev.images, ...uploaded] }))
+		} catch {
+			setUploadError('Failed to upload photo. Please try again.')
+		} finally {
+			setUploading(false)
+			if (fileInputRef.current) fileInputRef.current.value = ''
+		}
+	}, [form.images.length])
+
+	function pickPhoto() {
+		fileInputRef.current?.click()
+	}
 
 	function update(key: keyof ListingForm, value: string) {
 		setForm((prev) => ({ ...prev, [key]: value }))
@@ -659,6 +752,10 @@ export function ListFoodPage() {
 
 	function updateBool(key: keyof ListingForm, value: boolean) {
 		setForm((prev) => ({ ...prev, [key]: value }))
+	}
+
+	function updateImages(urls: string[]) {
+		setForm((prev) => ({ ...prev, images: urls }))
 	}
 
 	function canAdvance(): boolean {
@@ -676,8 +773,51 @@ export function ListFoodPage() {
 		if (step > 1) setStep(step - 1)
 	}
 
-	function handleSubmit() {
-		setSubmitted(true)
+	async function handleSubmit() {
+		setSubmitting(true)
+		setSubmitError(null)
+		try {
+			// Build pickup ISO strings from today's date + form time
+			const today = new Date().toISOString().slice(0, 10)
+			const pickupStartIso = form.pickupStart ? `${today}T${form.pickupStart}:00` : null
+			const pickupEndIso = form.pickupEnd ? `${today}T${form.pickupEnd}:00` : null
+
+			// Enforce 24h expiry cap
+			const maxExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+			const requestedExpiry = form.expiresAt ? new Date(form.expiresAt).toISOString() : maxExpiry
+			const expiresAt = requestedExpiry > maxExpiry ? maxExpiry : requestedExpiry
+
+			// Map dietary tag to food_type enum (backend expects 'nonveg', not 'non-veg')
+			const foodType =
+				form.dietaryTag === 'non-veg' ? 'nonveg' :
+				form.dietaryTag === 'vegan'   ? 'vegan'  : 'veg'
+
+			await consumerApi.createSurplusDonation({
+				title: form.foodName,
+				description: form.notes || null,
+				category: form.category,
+				food_type: foodType,
+				dietary_tags: form.dietaryTag ? [form.dietaryTag] : [],
+				quantity_kg: Math.max(0.1, parseFloat(form.quantityKg) || 1),
+				servings: form.servings ? parseInt(form.servings) : null,
+				cooked_at: form.cookedAt || null,
+				pickup_start: pickupStartIso,
+				pickup_end: pickupEndIso,
+				expires_at: expiresAt,
+				pickup_address: form.pickupLocation,
+				storage_type: form.storageType || null,
+				packaging_condition: form.packagingCondition || null,
+				images: form.images.length > 0 ? form.images : undefined,
+			})
+			setSubmitted(true)
+		} catch (err: unknown) {
+			const msg = (err as { response?: { data?: { detail?: string; message?: string } } })?.response?.data?.detail
+				?? (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+				?? 'Failed to submit listing. Please try again.'
+			setSubmitError(String(msg))
+		} finally {
+			setSubmitting(false)
+		}
 	}
 
 	if (submitted) {
@@ -722,30 +862,46 @@ export function ListFoodPage() {
 				<StepIndicator currentStep={step} />
 			</motion.div>
 
-			{/* Step content */}
-			<div className='min-h-[380px]'>
-				<AnimatePresence mode='wait'>
-					<motion.div
-						key={step}
-						initial={{ opacity: 0, x: 24 }}
-						animate={{ opacity: 1, x: 0 }}
-						exit={{ opacity: 0, x: -24 }}
-						transition={{ duration: 0.2 }}
-					>
-						{step === 1 && <Step1 form={form} update={update} />}
-						{step === 2 && <Step2 form={form} update={update} />}
-						{step === 3 && <Step3 form={form} update={update} />}
-						{step === 4 && (
-							<Step4
-								form={form}
-								update={update}
-								updateBool={updateBool}
-								onSubmit={handleSubmit}
-							/>
-						)}
-					</motion.div>
-				</AnimatePresence>
-			</div>
+		{/* Step content */}
+		<div className='min-h-[380px]'>
+			{/* Hidden native file input — lives OUTSIDE AnimatePresence so the ref
+			    is always attached to the DOM and .click() works reliably */}
+			<input
+				ref={fileInputRef}
+				type='file'
+				accept='image/jpeg,image/png,image/webp'
+				multiple
+				className='hidden'
+				onChange={handleFileChange}
+			/>
+			<AnimatePresence mode='wait'>
+				<motion.div
+					key={step}
+					initial={{ opacity: 0, x: 24 }}
+					animate={{ opacity: 1, x: 0 }}
+					exit={{ opacity: 0, x: -24 }}
+					transition={{ duration: 0.2 }}
+				>
+					{step === 1 && <Step1 form={form} update={update} />}
+					{step === 2 && <Step2 form={form} update={update} />}
+					{step === 3 && <Step3 form={form} update={update} />}
+					{step === 4 && (
+						<Step4
+							form={form}
+							update={update}
+							updateBool={updateBool}
+							updateImages={updateImages}
+							onSubmit={handleSubmit}
+							submitting={submitting}
+							submitError={submitError}
+							onPickPhoto={pickPhoto}
+							uploading={uploading}
+							uploadError={uploadError}
+						/>
+					)}
+				</motion.div>
+			</AnimatePresence>
+		</div>
 
 			{/* Navigation */}
 			{step < 4 && (

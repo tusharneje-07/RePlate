@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'motion/react'
-import { Leaf, ArrowRight, Loader2, AlertCircle, ShoppingBag, Store, HeartHandshake } from 'lucide-react'
+import { Leaf, ArrowRight, Loader2, AlertCircle, ShoppingBag, Store, HeartHandshake, Eye, EyeOff } from 'lucide-react'
 import { authApi } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -13,11 +13,14 @@ const STATS = [
 ]
 
 export function LoginPage() {
-	const { isAuthenticated, user } = useAuth()
+	const { isAuthenticated, user, login } = useAuth()
 	const navigate = useNavigate()
 	const [searchParams] = useSearchParams()
 	const [isLoading, setIsLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
+	const [email, setEmail] = useState('')
+	const [password, setPassword] = useState('')
+	const [showPassword, setShowPassword] = useState(false)
 
 	// Show error if redirected back from backend with ?error=auth_failed
 	useEffect(() => {
@@ -39,14 +42,33 @@ export function LoginPage() {
 		return null
 	}
 
-	async function handleSignIn(hint: 'sign-in' | 'sign-up' = 'sign-in') {
+	async function handleLocalLogin(e: React.FormEvent) {
+		e.preventDefault()
 		setError(null)
+		if (!email.trim() || !password) {
+			setError('Please enter your email and password.')
+			return
+		}
 		setIsLoading(true)
 		try {
-			const { data } = await authApi.getAuthorizeUrl(hint, window.location.origin)
-			window.location.href = data.authorization_url
-		} catch {
-			setError('Could not reach the server. Please try again.')
+			const { data } = await authApi.localLogin(email.trim(), password)
+			const payload = await login(data.access_token)
+			const role = payload.role?.toLowerCase()
+			if (!role) {
+				navigate('/auth/select-role', { replace: true })
+			} else if (!data.is_onboarded) {
+				navigate(`/${role}/onboarding`, { replace: true })
+			} else {
+				navigate(`/${role}/dashboard`, { replace: true })
+			}
+		} catch (err: unknown) {
+			const status = (err as { response?: { status?: number } })?.response?.status
+			if (status === 401) {
+				setError('Invalid email or password.')
+			} else {
+				setError('Could not reach the server. Please try again.')
+			}
+		} finally {
 			setIsLoading(false)
 		}
 	}
@@ -94,7 +116,7 @@ export function LoginPage() {
 
 				{/* Footer note */}
 				<p className='relative text-white/40 text-xs'>
-					Identity managed securely by WorkOS
+					Demo credentials: consumer@replate.dev / consumer123
 				</p>
 			</motion.div>
 
@@ -120,7 +142,7 @@ export function LoginPage() {
 							Welcome back
 						</h2>
 						<p className='text-sm text-[var(--color-text-muted)]'>
-							Sign in to your account or create a new one.
+							Sign in to your account to continue.
 						</p>
 					</div>
 
@@ -136,10 +158,51 @@ export function LoginPage() {
 						</motion.div>
 					)}
 
-					{/* Primary CTA */}
-					<div className='space-y-3'>
+					{/* Email/password form */}
+					<form onSubmit={handleLocalLogin} className='space-y-4'>
+						<div className='space-y-1.5'>
+							<label className='text-xs font-medium text-[var(--color-text-secondary)]' htmlFor='email'>
+								Email address
+							</label>
+							<input
+								id='email'
+								type='email'
+								autoComplete='email'
+								required
+								value={email}
+								onChange={(e) => setEmail(e.target.value)}
+								placeholder='you@example.com'
+								className='w-full h-10 px-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-white text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-accent)]/30 focus:border-[var(--color-brand-accent)] transition-colors'
+							/>
+						</div>
+
+						<div className='space-y-1.5'>
+							<label className='text-xs font-medium text-[var(--color-text-secondary)]' htmlFor='password'>
+								Password
+							</label>
+							<div className='relative'>
+								<input
+									id='password'
+									type={showPassword ? 'text' : 'password'}
+									autoComplete='current-password'
+									required
+									value={password}
+									onChange={(e) => setPassword(e.target.value)}
+									placeholder='••••••••'
+									className='w-full h-10 px-3 pr-10 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-white text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-accent)]/30 focus:border-[var(--color-brand-accent)] transition-colors'
+								/>
+								<button
+									type='button'
+									onClick={() => setShowPassword((v) => !v)}
+									className='absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-disabled)] hover:text-[var(--color-text-secondary)] transition-colors'
+								>
+									{showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+								</button>
+							</div>
+						</div>
+
 						<button
-							onClick={() => handleSignIn('sign-in')}
+							type='submit'
 							disabled={isLoading}
 							className='w-full h-11 flex items-center justify-center gap-2.5 rounded-[var(--radius-full)] bg-[var(--color-brand-accent)] text-white text-sm font-semibold hover:bg-[var(--color-brand-accent-hover)] active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-sm'
 						>
@@ -147,25 +210,21 @@ export function LoginPage() {
 								<Loader2 size={16} className='animate-spin' />
 							) : (
 								<>
-									Continue with WorkOS
+									Sign in
 									<ArrowRight size={15} />
 								</>
 							)}
 						</button>
+					</form>
 
-						<div className='flex items-center gap-3'>
-							<div className='flex-1 h-px bg-[var(--color-border)]' />
-							<span className='text-xs text-[var(--color-text-disabled)]'>or</span>
-							<div className='flex-1 h-px bg-[var(--color-border)]' />
+					{/* Demo credentials hint */}
+					<div className='rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-3 space-y-1.5'>
+						<p className='text-[11px] uppercase tracking-widest text-[var(--color-text-disabled)] font-medium'>Demo accounts</p>
+						<div className='space-y-1 text-xs text-[var(--color-text-muted)]'>
+							<p><span className='font-medium text-[var(--color-text-secondary)]'>Consumer:</span> consumer@replate.dev / consumer123</p>
+							<p><span className='font-medium text-[var(--color-text-secondary)]'>Seller:</span> seller@replate.dev / seller123</p>
+							<p><span className='font-medium text-[var(--color-text-secondary)]'>NGO:</span> ngo@replate.dev / ngo123</p>
 						</div>
-
-						<button
-							onClick={() => handleSignIn('sign-up')}
-							disabled={isLoading}
-							className='w-full h-11 flex items-center justify-center gap-2 rounded-[var(--radius-full)] border border-[var(--color-border)] bg-white text-sm font-medium text-[var(--color-text-primary)] hover:border-[var(--color-brand-accent)] hover:bg-[var(--color-brand-accent-light)] active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed'
-						>
-							Create a new account
-						</button>
 					</div>
 
 					{/* Fine print */}

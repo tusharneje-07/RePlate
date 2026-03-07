@@ -168,9 +168,9 @@ export function CartPage() {
 							<Clock size={13} className='text-[var(--color-brand-accent)]' />
 							<p className='text-xs text-[var(--color-brand-accent)] font-medium'>
 								Pickup:{' '}
-								{formatPickupTime(new Date(group.items[0].foodItem.pickupStart))}
-								{' – '}
-								{formatPickupTime(new Date(group.items[0].foodItem.pickupEnd))}
+								{group.items[0].foodItem.pickupStart && group.items[0].foodItem.pickupEnd
+									? `${formatPickupTime(new Date(group.items[0].foodItem.pickupStart))} – ${formatPickupTime(new Date(group.items[0].foodItem.pickupEnd))}`
+									: 'See store hours'}
 							</p>
 						</div>
 

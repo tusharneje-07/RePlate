@@ -4,8 +4,9 @@ import { motion } from 'motion/react'
 import { Leaf, Users, Zap, Package, TrendingUp, Award, BarChart2, Calendar, TreePine, Car, Plane, Flame } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { staggerContainer, slideUp, fadeIn } from '@/lib/motion'
+import { useQuery } from '@tanstack/react-query'
 import { useNGOStore } from '@/stores/ngo-store'
-import { mockNGOImpact } from '@/data/ngo-mock'
+import { ngoApi } from '@/lib/api'
 import { CO2_PER_TREE_YEAR, CO2_PER_CAR_KM, CO2_PER_FLIGHT_MUM_DEL } from '@/lib/utils'
 
 // ── Mini bar chart ─────────────────────────────────────────────
@@ -87,10 +88,44 @@ const CO2_EQUIVALENTS: { label: string; divisor: number; icon: React.ReactNode }
 
 // ── Main Page ──────────────────────────────────────────────────
 export function NGOImpactPage() {
-	const { history } = useNGOStore()
-	const impact = mockNGOImpact
+	const { history, pickups } = useNGOStore()
 	const [chartView, setChartView] = useState<'weekly' | 'monthly'>('weekly')
 	const [chartMetric, setChartMetric] = useState<'foodKg' | 'meals' | 'pickups'>('meals')
+
+	// Fetch live dashboard stats
+	const { data: dashboardRes } = useQuery({
+		queryKey: ['ngo-dashboard'],
+		queryFn: () => ngoApi.getDashboard('weekly'),
+		staleTime: 5 * 60 * 1000,
+	})
+	const dashboard = dashboardRes?.data?.data
+
+	// Use real API data only
+	const impact = {
+		totalFoodRescuedKg: dashboard?.total_food_collected_kg ?? 0,
+		totalMealsServed: dashboard?.total_beneficiaries_served ?? 0,
+		totalCo2PreventedKg: dashboard?.co2_reduction_total ?? 0,
+		totalPickups: dashboard?.total_pickups_completed ?? 0,
+		activePickups: pickups.filter(p => p.status !== 'completed' && p.status !== 'cancelled').length,
+		communityReach: dashboard?.total_beneficiaries_served ?? 0,
+		// Generate empty weekly/monthly data arrays for now
+		weeklyData: Array.from({ length: 7 }, (_, i) => ({
+			day: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i],
+			foodKg: 0,
+			meals: 0,
+			pickups: 0,
+		})),
+		monthlyData: Array.from({ length: 6 }, (_, i) => {
+			const date = new Date()
+			date.setMonth(date.getMonth() - (5 - i))
+			return {
+				month: date.toLocaleDateString('en-US', { month: 'short' }),
+				foodKg: 0,
+				meals: 0,
+				pickups: 0,
+			}
+		}),
+	}
 
 	const chartData = chartView === 'weekly' ? impact.weeklyData : impact.monthlyData
 	const labelKey = chartView === 'weekly' ? 'day' : 'month'

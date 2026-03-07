@@ -30,6 +30,7 @@ import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import { useSellerStore } from '@/stores/seller-store'
 import { useSellerUIStore } from '@/stores/seller-ui-store'
 import { cn } from '@/lib/utils'
+import { DemandForecastCard } from '@/components/ai/DemandForecastCard'
 
 const weatherSuggestion = {
 	condition: 'Live weather insights',
@@ -696,10 +697,15 @@ export function SellerDashboardPage() {
 				/>
 			</motion.div>
 
-			{/* ── AI Pricing Banner ── */}
-			<AIPricingBanner />
+		{/* ── AI Pricing Banner ── */}
+		<AIPricingBanner />
 
-			{/* ── Active Orders ── */}
+		{/* ── AI Demand Forecast ── */}
+		<motion.div variants={slideUp}>
+			<DemandForecastCard />
+		</motion.div>
+
+		{/* ── Active Orders ── */}
 			<motion.div variants={slideUp}>
 				<OrderBreakdown />
 			</motion.div>
