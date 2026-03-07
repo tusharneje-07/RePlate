@@ -202,16 +202,26 @@ class NGODonationRepository:
         listing: FoodListing,
         requested_quantity: int,
         pickup_time: Optional[str],
-    ) -> NGOListingRequest:
-        # Prevent duplicate active request
+    ) -> tuple[NGOListingRequest, PickupRecord]:
+        # Prevent duplicate active request (REQUESTED or APPROVED)
         dup = await self.db.execute(
             select(NGOListingRequest).where(
                 NGOListingRequest.ngo_id == ngo_id,
                 NGOListingRequest.listing_id == listing.id,
-                NGOListingRequest.approval_status == DonationApprovalStatus.REQUESTED,
+                NGOListingRequest.approval_status.in_(
+                    [DonationApprovalStatus.REQUESTED, DonationApprovalStatus.APPROVED]
+                ),
             )
         )
-        if dup.scalar_one_or_none():
+        existing_req = dup.scalar_one_or_none()
+        if existing_req:
+            # Return the existing request + its pickup record (if any)
+            pr = await self.db.execute(
+                select(PickupRecord).where(PickupRecord.donation_request_id == existing_req.id)
+            )
+            existing_pickup = pr.scalar_one_or_none()
+            if existing_pickup:
+                return existing_req, existing_pickup
             raise ValueError("An active request already exists for this listing")
 
         if listing.quantity_available < requested_quantity:
@@ -219,6 +229,7 @@ class NGODonationRepository:
                 f"Only {listing.quantity_available} units available; requested {requested_quantity}"
             )
 
+        # Auto-approve: free donations don't need manual approval
         req = NGOListingRequest(
             id=_new_id(),
             ngo_id=ngo_id,
@@ -226,13 +237,26 @@ class NGODonationRepository:
             seller_id=listing.seller_id,
             requested_quantity=requested_quantity,
             pickup_time=pickup_time,
-            approval_status=DonationApprovalStatus.REQUESTED,
+            approval_status=DonationApprovalStatus.APPROVED,
         )
         self.db.add(req)
-        await self.db.flush()
+        await self.db.flush()  # get req.id without committing
+
+        # Auto-create PickupRecord
+        pickup_record = PickupRecord(
+            id=_new_id(),
+            donation_request_id=req.id,
+            seller_id=listing.seller_id,
+            pickup_code=f"DN-{uuid.uuid4().hex[:8].upper()}",
+            pickup_status=PickupStatus.PENDING,
+            pickup_time=pickup_time,
+            verification_method=VerificationMethod.CODE,
+        )
+        self.db.add(pickup_record)
         await self.db.commit()
         await self.db.refresh(req)
-        return req
+        await self.db.refresh(pickup_record)
+        return req, pickup_record
 
     async def list_requests(
         self,
@@ -317,13 +341,18 @@ class NGOPickupRepository:
         pickup_status: Optional[str],
         limit: int,
         offset: int,
-    ) -> tuple[list[PickupRecord], int]:
-        # Join with donation requests to filter by ngo_id
+    ) -> tuple[list[dict], int]:
+        """Return enriched pickup rows: PickupRecord + NGOListingRequest + FoodListing."""
         stmt = (
-            select(PickupRecord)
+            select(PickupRecord, NGOListingRequest, FoodListing)
             .join(
                 NGOListingRequest,
                 NGOListingRequest.id == PickupRecord.donation_request_id,
+            )
+            .join(
+                FoodListing,
+                FoodListing.id == NGOListingRequest.listing_id,
+                isouter=True,
             )
             .where(NGOListingRequest.ngo_id == ngo_id)
         )
@@ -342,21 +371,32 @@ class NGOPickupRepository:
             stmt.order_by(PickupRecord.created_at.desc()).offset(offset).limit(limit)
         )
         total = int((await self.db.execute(count_stmt)).scalar() or 0)
-        return list(result.scalars().all()), total
+        rows = [{"pickup": pr, "request": req, "listing": lst} for pr, req, lst in result.all()]
+        return rows, total
 
-    async def get_pickup_for_ngo(self, ngo_id: str, pickup_id: str) -> Optional[PickupRecord]:
+    async def get_pickup_for_ngo(self, ngo_id: str, pickup_id: str) -> Optional[dict]:
+        """Return enriched pickup dict or None."""
         result = await self.db.execute(
-            select(PickupRecord)
+            select(PickupRecord, NGOListingRequest, FoodListing)
             .join(
                 NGOListingRequest,
                 NGOListingRequest.id == PickupRecord.donation_request_id,
+            )
+            .join(
+                FoodListing,
+                FoodListing.id == NGOListingRequest.listing_id,
+                isouter=True,
             )
             .where(
                 PickupRecord.id == pickup_id,
                 NGOListingRequest.ngo_id == ngo_id,
             )
         )
-        return result.scalar_one_or_none()
+        row = result.first()
+        if row is None:
+            return None
+        pr, req, lst = row
+        return {"pickup": pr, "request": req, "listing": lst}
 
     async def complete_pickup(self, pickup: PickupRecord) -> PickupRecord:
         pickup.pickup_status = PickupStatus.COMPLETED

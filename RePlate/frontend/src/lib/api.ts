@@ -373,6 +373,9 @@ export interface DonationRequestOut {
 	listing_quantity_unit: string | null
 	listing_category: string | null
 	seller_name: string | null
+	// Auto-created pickup info (returned immediately after claim)
+	pickup_id: string | null
+	pickup_code: string | null
 }
 
 export interface NGOPickupOut {
@@ -384,6 +387,21 @@ export interface NGOPickupOut {
 	pickup_time: string | null
 	verification_method: string
 	created_at: string
+	// Enriched listing / donor details
+	listing_id: string | null
+	listing_title: string | null
+	listing_description: string | null
+	listing_category: string | null
+	listing_images: string[] | null
+	listing_quantity: number | null
+	listing_quantity_unit: string | null
+	listing_expires_at: string | null
+	listing_pickup_start: string | null
+	listing_pickup_end: string | null
+	seller_name: string | null
+	seller_address: string | null
+	seller_lat: number | null
+	seller_lng: number | null
 }
 
 export interface NGODashboardOut {

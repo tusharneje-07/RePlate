@@ -38,21 +38,20 @@ function StatusBadge({ status, priority }: { status: string, priority?: string }
 // ── Main Pickups Page ─────────────────────────────────────────
 export function NGOPickupsPage() {
 	const navigate = useNavigate()
-	const { pickups } = useNGOStore()
+	const { pickups, history } = useNGOStore()
 	const [searchQuery, setSearchQuery] = useState('')
 	const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active')
 
+	// Active pickups come from `pickups`, completed from `history`
+	const sourceList = activeTab === 'completed' ? history : pickups
+
 	// Filter
-	const filtered = pickups.filter((p) => {
+	const filtered = sourceList.filter((p) => {
 		const matchesSearch =
 			p.donation.donorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
 			p.donation.foodName.toLowerCase().includes(searchQuery.toLowerCase()) ||
 			p.id.toLowerCase().includes(searchQuery.toLowerCase())
-
-		if (!matchesSearch) return false
-		if (activeTab === 'active' && (p.status === 'completed' || p.status === 'cancelled')) return false
-		if (activeTab === 'completed' && p.status !== 'completed') return false
-		return true
+		return matchesSearch
 	})
 
 	// Sort active by expiry urgency

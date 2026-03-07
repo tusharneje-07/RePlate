@@ -114,6 +114,9 @@ class DonationRequestOut(BaseModel):
     listing_quantity_unit: Optional[str] = None
     listing_category: Optional[str] = None
     seller_name: Optional[str] = None
+    # Auto-created pickup info (returned immediately after claim)
+    pickup_id: Optional[str] = None
+    pickup_code: Optional[str] = None
 
 
 # ── Pickup Management ──────────────────────────────────────────────────────────
@@ -133,6 +136,21 @@ class NGOPickupOut(BaseModel):
     pickup_time: Optional[str] = None
     verification_method: str
     created_at: datetime
+    # Enriched listing / donor details
+    listing_id: Optional[str] = None
+    listing_title: Optional[str] = None
+    listing_description: Optional[str] = None
+    listing_category: Optional[str] = None
+    listing_images: Optional[list[str]] = None
+    listing_quantity: Optional[int] = None
+    listing_quantity_unit: Optional[str] = None
+    listing_expires_at: Optional[str] = None
+    listing_pickup_start: Optional[str] = None
+    listing_pickup_end: Optional[str] = None
+    seller_name: Optional[str] = None
+    seller_address: Optional[str] = None
+    seller_lat: Optional[float] = None
+    seller_lng: Optional[float] = None
 
 
 # ── Distribution Tracking ─────────────────────────────────────────────────────

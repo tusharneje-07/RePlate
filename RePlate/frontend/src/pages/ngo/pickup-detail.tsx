@@ -10,7 +10,6 @@ import {
 	Phone,
 	Navigation,
 	CheckCircle2,
-	QrCode,
 	AlertTriangle,
 	Info,
 	HeartHandshake,
@@ -18,6 +17,7 @@ import {
 	X,
 	XCircle,
 } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -175,8 +175,8 @@ export function NGOPickupDetailPage() {
 									<p className='text-xs font-bold tracking-wider text-[var(--color-ngo-text-muted)] uppercase mb-1'>Verification Code</p>
 									<p className='text-3xl font-mono font-bold tracking-widest text-[var(--color-ngo-accent)]'>{pickup.verificationCode}</p>
 								</div>
-								<div className='w-16 h-16 bg-white rounded-[var(--radius-md)] border border-[var(--color-ngo-border)] flex items-center justify-center p-2'>
-									<QrCode size={40} className='text-[var(--color-ngo-text-primary)]' />
+								<div className='w-16 h-16 bg-white rounded-[var(--radius-md)] border border-[var(--color-ngo-border)] flex items-center justify-center p-1.5'>
+									<QRCodeSVG value={pickup.verificationCode} size={52} level='M' />
 								</div>
 							</div>
 						)}
@@ -329,15 +329,15 @@ export function NGOPickupDetailPage() {
 										<Input
 											value={scannedCode}
 											onChange={(e) => setScannedCode(e.target.value.toUpperCase())}
-											placeholder='e.g. AAH-7821'
-											className='text-center text-xl font-mono tracking-widest h-14 uppercase font-bold'
-											maxLength={8}
+										placeholder='e.g. DN-A1B2C3D4'
+										className='text-center text-xl font-mono tracking-widest h-14 uppercase font-bold'
+										maxLength={11}
 										/>
 										{verifyError && <p className='text-xs text-[var(--color-error)] text-center font-medium'>{verifyError}</p>}
 										<Button 
 											className='w-full bg-[var(--color-ngo-accent)] hover:bg-[var(--color-ngo-accent-hover)] text-white h-12 font-bold'
 											onClick={handleVerify}
-											disabled={scannedCode.length < 5}
+											disabled={scannedCode.length < 8}
 										>
 											Verify Code
 										</Button>

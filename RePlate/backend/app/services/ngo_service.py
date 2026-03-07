@@ -9,7 +9,13 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.food import DonationApprovalStatus, SellerNotificationType
+from app.models.food import (
+    DonationApprovalStatus,
+    FoodListing,
+    NGOListingRequest,
+    PickupRecord,
+    SellerNotificationType,
+)
 from app.models.ngo import NGONotificationType
 from app.models.profiles import NGOVerificationStatus, NGOType
 from app.repositories.ngo_repository import (
@@ -97,7 +103,7 @@ def _profile_to_out(user, profile) -> NGOProfileOut:
     )
 
 
-def _request_to_out(row, listing=None) -> DonationRequestOut:
+def _request_to_out(row, listing=None, pickup_record=None) -> DonationRequestOut:
     return DonationRequestOut(
         id=row.id,
         ngo_id=row.ngo_id,
@@ -116,10 +122,27 @@ def _request_to_out(row, listing=None) -> DonationRequestOut:
         listing_quantity_unit=listing.quantity_unit if listing else None,
         listing_category=listing.category if listing else None,
         seller_name=listing.seller_name if listing else None,
+        pickup_id=pickup_record.id if pickup_record else None,
+        pickup_code=pickup_record.pickup_code if pickup_record else None,
     )
 
 
-def _pickup_to_out(row) -> NGOPickupOut:
+def _pickup_to_out(enriched: dict) -> NGOPickupOut:
+    row: PickupRecord = enriched["pickup"]
+    req: NGOListingRequest = enriched.get("request")  # type: ignore[assignment]
+    listing: FoodListing = enriched.get("listing")  # type: ignore[assignment]
+
+    images: list[str] = []
+    if listing and listing.images:
+        try:
+            import json as _json
+
+            parsed = _json.loads(listing.images)
+            if isinstance(parsed, list):
+                images = [str(v) for v in parsed if v]
+        except Exception:
+            images = [listing.images]
+
     return NGOPickupOut(
         id=row.id,
         donation_request_id=row.donation_request_id,
@@ -137,6 +160,21 @@ def _pickup_to_out(row) -> NGOPickupOut:
             else str(row.verification_method)
         ),
         created_at=row.created_at,
+        # Enriched fields
+        listing_id=listing.id if listing else None,
+        listing_title=listing.title if listing else None,
+        listing_description=listing.description if listing else None,
+        listing_category=listing.category if listing else None,
+        listing_images=images if images else None,
+        listing_quantity=int(req.requested_quantity) if req else None,
+        listing_quantity_unit=listing.quantity_unit if listing else None,
+        listing_expires_at=listing.expires_at if listing else None,
+        listing_pickup_start=listing.pickup_start if listing else None,
+        listing_pickup_end=listing.pickup_end if listing else None,
+        seller_name=listing.seller_name if listing else None,
+        seller_address=listing.seller_address if listing else None,
+        seller_lat=float(listing.seller_lat) if listing and listing.seller_lat else None,
+        seller_lng=float(listing.seller_lng) if listing and listing.seller_lng else None,
     )
 
 
@@ -338,7 +376,7 @@ class NGODonationService:
             except Exception:
                 pass
         try:
-            req = await self.repo.create_request(
+            req, pickup_record = await self.repo.create_request(
                 ngo_id, listing, body.requested_quantity, body.pickup_time
             )
         except ValueError as exc:
@@ -350,7 +388,7 @@ class NGODonationService:
             f"NGO requested {req.requested_quantity} units of {listing.title}.",
             listing_id=listing.id,
         )
-        return _request_to_out(req, listing)
+        return _request_to_out(req, listing, pickup_record)
 
     async def list_requests(
         self,
@@ -373,10 +411,13 @@ class NGODonationService:
         row = await self.repo.get_request(ngo_id, request_id)
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
-        if row.approval_status != DonationApprovalStatus.REQUESTED:
+        if row.approval_status not in (
+            DonationApprovalStatus.REQUESTED,
+            DonationApprovalStatus.APPROVED,
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only REQUESTED requests can be cancelled",
+                detail="Only active requests can be cancelled",
             )
         updated = await self.repo.cancel_request(row)
         await self.seller_notif_repo.create(
@@ -423,7 +464,8 @@ class NGOPickupService:
             f"Pickup scheduled for request {req.id}.",
             listing_id=req.listing_id,
         )
-        return _pickup_to_out(record)
+        listing = await self.donation_repo.get_listing(req.listing_id)
+        return _pickup_to_out({"pickup": record, "request": req, "listing": listing})
 
     async def list_pickups(
         self,
@@ -442,32 +484,32 @@ class NGOPickupService:
         return _pickup_to_out(row)
 
     async def complete_pickup(self, ngo_id: str, pickup_id: str) -> NGOPickupOut:
-        row = await self.repo.get_pickup_for_ngo(ngo_id, pickup_id)
-        if row is None:
+        enriched = await self.repo.get_pickup_for_ngo(ngo_id, pickup_id)
+        if enriched is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pickup not found")
-        completed = await self.repo.complete_pickup(row)
+        pickup_record: PickupRecord = enriched["pickup"]
+        req: NGOListingRequest = enriched.get("request")  # type: ignore[assignment]
+        listing: FoodListing = enriched.get("listing")  # type: ignore[assignment]
+        completed = await self.repo.complete_pickup(pickup_record)
 
         # Auto-create environmental impact record
-        if completed.donation_request_id:
-            req = await self.donation_repo.get_request(ngo_id, completed.donation_request_id)
-            if req:
-                food_kg = float(req.requested_quantity)
-                try:
-                    await self.impact_repo.create_for_pickup(
-                        ngo_id, completed.donation_request_id, food_kg
+        if completed.donation_request_id and req:
+            food_kg = float(req.requested_quantity)
+            try:
+                await self.impact_repo.create_for_pickup(
+                    ngo_id, completed.donation_request_id, food_kg
+                )
+            except Exception:
+                pass
+            try:
+                if listing is not None and listing.quantity_available is not None:
+                    listing.quantity_available = max(
+                        0, int(listing.quantity_available) - int(req.requested_quantity)
                     )
-                except Exception:
-                    pass
-                try:
-                    listing = await self.donation_repo.get_listing(req.listing_id)
-                    if listing is not None and listing.quantity_available is not None:
-                        listing.quantity_available = max(
-                            0, int(listing.quantity_available) - int(req.requested_quantity)
-                        )
-                        self.donation_repo.db.add(listing)
-                        await self.donation_repo.db.commit()
-                except Exception:
-                    pass
+                    self.donation_repo.db.add(listing)
+                    await self.donation_repo.db.commit()
+            except Exception:
+                pass
 
         await self.notif_repo.create(
             ngo_id,
@@ -476,7 +518,7 @@ class NGOPickupService:
             f"Pickup {pickup_id} has been marked as completed.",
             reference_id=pickup_id,
         )
-        return _pickup_to_out(completed)
+        return _pickup_to_out({"pickup": completed, "request": req, "listing": listing})
 
 
 class NGODistributionService:

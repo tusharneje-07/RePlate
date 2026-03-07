@@ -94,40 +94,51 @@ function adaptDonationListing(d: DonationListingOut): Donation {
 }
 
 function adaptPickup(p: NGOPickupOut): NGOPickup {
-	// Create a minimal donation placeholder — pickup details alone
-	const donationPlaceholder: Donation = {
-		id: p.donation_request_id ?? p.id,
+	const qtyKg = p.listing_quantity ?? 0
+	const servings = Math.round(qtyKg * 4)
+
+	const donationData: Donation = {
+		id: p.listing_id ?? p.donation_request_id ?? p.id,
 		donorId: p.seller_id,
-		donorName: 'Donor',
+		donorName: p.seller_name ?? 'Donor',
 		donorType: 'seller',
-		donorAddress: '',
+		donorAddress: p.seller_address ?? '',
 		donorPhone: '',
-		donorLocation: { lat: 19.0748, lng: 72.8856 },
-		foodName: 'Food Pickup',
-		description: '',
-		category: 'meals',
+		donorLocation: {
+			lat: p.seller_lat ?? 19.0748,
+			lng: p.seller_lng ?? 72.8856,
+		},
+		foodName: p.listing_title ?? 'Food Pickup',
+		description: p.listing_description ?? '',
+		category: (p.listing_category as Donation['category']) ?? 'meals',
 		dietaryTag: 'veg',
-		quantityKg: 0,
-		servings: 0,
-		images: ['https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&h=400&fit=crop'],
+		quantityKg: qtyKg,
+		servings,
+		images:
+			p.listing_images && p.listing_images.length > 0
+				? p.listing_images
+				: ['https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&h=400&fit=crop'],
 		cookedAt: p.created_at,
-		expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-		pickupStart: p.pickup_time ?? new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-		pickupEnd: p.pickup_time ?? new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+		expiresAt:
+			p.listing_expires_at ?? new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+		pickupStart:
+			p.listing_pickup_start ?? p.pickup_time ?? new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+		pickupEnd:
+			p.listing_pickup_end ?? p.pickup_time ?? new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
 		storageType: 'room_temp',
 		packagingCondition: 'containers',
 		hygieneConfirmed: true,
 		status: p.pickup_status === 'completed' ? 'completed' : 'claimed',
-		urgency: 'medium',
+		urgency: computeUrgency(p.listing_expires_at),
 		distance: 3000,
-		co2SavedKg: 0,
+		co2SavedKg: Math.round(qtyKg * 2.5),
 		listedAt: p.created_at,
 	}
 
 	return {
 		id: p.id,
 		donationId: p.donation_request_id ?? p.id,
-		donation: donationPlaceholder,
+		donation: donationData,
 		ngoId: '',
 		scheduledAt: p.pickup_time ?? p.created_at,
 		status: p.pickup_status as NGOPickup['status'],
@@ -230,11 +241,34 @@ export const useNGOStore = create<NGOState>()(
 				),
 			}))
 			try {
-				// Call backend to create a donation request
-				await ngoApi.createDonationRequest({
+				// Call backend: auto-approves and creates PickupRecord
+				const res = await ngoApi.createDonationRequest({
 					listing_id: donationId,
 					requested_quantity: Math.max(1, Math.round(donation.quantityKg)),
 				})
+				const donationRequest = res.data
+
+				// Build an NGOPickup from the returned request + donation details
+				if (donationRequest.pickup_id && donationRequest.pickup_code) {
+					const now = new Date().toISOString()
+					const newPickup: NGOPickup = {
+						id: donationRequest.pickup_id,
+						donationId: donationRequest.id,
+						donation: {
+							...donation,
+							status: 'claimed',
+						},
+						ngoId: donationRequest.ngo_id,
+						scheduledAt: donationRequest.pickup_time ?? now,
+						status: 'pending',
+						priority: 'normal',
+						verificationCode: donationRequest.pickup_code,
+						qrCode: donationRequest.pickup_code,
+					}
+					set((s) => ({
+						pickups: [newPickup, ...s.pickups.filter((p) => p.donationId !== donationRequest.id)],
+					}))
+				}
 			} catch {
 				// Roll back optimistic update on failure
 				set((s) => ({
