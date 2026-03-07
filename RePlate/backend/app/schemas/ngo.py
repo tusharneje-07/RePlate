@@ -71,6 +71,7 @@ class DonationListingOut(BaseModel):
     description: Optional[str] = None
     category: str
     food_type: str
+    donor_role: str = "seller"
     quantity_available: int
     quantity_unit: str
     original_price: float

@@ -3,6 +3,13 @@
 import enum
 from datetime import datetime
 
+
+# MySQL stores enum values by their .value strings (lowercase), not .name.
+# This callable tells SQLAlchemy to use the enum's .value instead of .name.
+def _vc(enum_cls):  # values_callable helper
+    return [e.value for e in enum_cls]
+
+
 from sqlalchemy import (
     Boolean,
     Enum as SAEnum,
@@ -71,6 +78,11 @@ class FoodType(str, enum.Enum):
     VEG = "veg"
     NONVEG = "nonveg"
     VEGAN = "vegan"
+
+
+class DonorRole(str, enum.Enum):
+    SELLER = "seller"
+    CONSUMER = "consumer"
 
 
 class PaymentStatus(str, enum.Enum):
@@ -222,8 +234,14 @@ class FoodListing(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # ── Sustainability ────────────────────────────────────────────────────────
     co2_saved_per_unit: Mapped[float | None] = mapped_column(Numeric(8, 3), nullable=True)
     is_donation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    donor_role: Mapped[DonorRole] = mapped_column(
+        SAEnum(DonorRole, name="donor_role", values_callable=_vc),
+        default=DonorRole.SELLER,
+        nullable=False,
+        index=True,
+    )
     food_type: Mapped[FoodType] = mapped_column(
-        SAEnum(FoodType, name="food_type"),
+        SAEnum(FoodType, name="food_type", values_callable=_vc),
         default=FoodType.VEG,
         nullable=False,
     )
@@ -241,7 +259,7 @@ class FoodListing(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # ── Listing state ─────────────────────────────────────────────────────────
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     seller_status: Mapped[SellerListingStatus] = mapped_column(
-        SAEnum(SellerListingStatus, name="seller_listing_status"),
+        SAEnum(SellerListingStatus, name="seller_listing_status", values_callable=_vc),
         default=SellerListingStatus.ACTIVE,
         nullable=False,
         index=True,
@@ -282,7 +300,7 @@ class Order(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     order_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     status: Mapped[OrderStatus] = mapped_column(
-        SAEnum(OrderStatus, name="order_status"),
+        SAEnum(OrderStatus, name="order_status", values_callable=_vc),
         default=OrderStatus.PENDING,
         nullable=False,
         index=True,
@@ -295,7 +313,7 @@ class Order(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     platform_fee: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0)
     payment_method: Mapped[str] = mapped_column(String(50), nullable=False, default="cod")
     payment_status: Mapped[PaymentStatus] = mapped_column(
-        SAEnum(PaymentStatus, name="payment_status"),
+        SAEnum(PaymentStatus, name="payment_status", values_callable=_vc),
         default=PaymentStatus.PENDING,
         nullable=False,
         index=True,
@@ -387,7 +405,7 @@ class Favorite(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     favorite_type: Mapped[FavoriteType] = mapped_column(
-        SAEnum(FavoriteType, name="favorite_type"),
+        SAEnum(FavoriteType, name="favorite_type", values_callable=_vc),
         nullable=False,
     )
     # Only one of these two is set depending on favorite_type
@@ -438,7 +456,7 @@ class ImpactStat(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     level: Mapped[ImpactLevel] = mapped_column(
-        SAEnum(ImpactLevel, name="impact_level"),
+        SAEnum(ImpactLevel, name="impact_level", values_callable=_vc),
         default=ImpactLevel.SEEDLING,
         nullable=False,
     )
@@ -503,7 +521,7 @@ class SellerNotification(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     event_type: Mapped[SellerNotificationType] = mapped_column(
-        SAEnum(SellerNotificationType, name="seller_notification_type"),
+        SAEnum(SellerNotificationType, name="seller_notification_type", values_callable=_vc),
         nullable=False,
         index=True,
     )
@@ -573,7 +591,7 @@ class NGOListingRequest(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     requested_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     pickup_time: Mapped[str | None] = mapped_column(String(50), nullable=True)
     approval_status: Mapped[DonationApprovalStatus] = mapped_column(
-        SAEnum(DonationApprovalStatus, name="donation_approval_status"),
+        SAEnum(DonationApprovalStatus, name="donation_approval_status", values_callable=_vc),
         default=DonationApprovalStatus.REQUESTED,
         nullable=False,
         index=True,
@@ -605,14 +623,14 @@ class PickupRecord(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     pickup_code: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     pickup_status: Mapped[PickupStatus] = mapped_column(
-        SAEnum(PickupStatus, name="pickup_status"),
+        SAEnum(PickupStatus, name="pickup_status", values_callable=_vc),
         default=PickupStatus.PENDING,
         nullable=False,
         index=True,
     )
     pickup_time: Mapped[str | None] = mapped_column(String(50), nullable=True)
     verification_method: Mapped[VerificationMethod] = mapped_column(
-        SAEnum(VerificationMethod, name="verification_method"),
+        SAEnum(VerificationMethod, name="verification_method", values_callable=_vc),
         default=VerificationMethod.CODE,
         nullable=False,
     )
@@ -679,7 +697,7 @@ class SellerVerification(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     fssai_license_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     business_registration_doc: Mapped[str | None] = mapped_column(Text, nullable=True)
     verification_status: Mapped[VerificationStatus] = mapped_column(
-        SAEnum(VerificationStatus, name="verification_status"),
+        SAEnum(VerificationStatus, name="verification_status", values_callable=_vc),
         default=VerificationStatus.PENDING,
         nullable=False,
         index=True,
@@ -707,7 +725,7 @@ class NGOVerification(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     registration_document: Mapped[str | None] = mapped_column(Text, nullable=True)
     verification_status: Mapped[VerificationStatus] = mapped_column(
-        SAEnum(VerificationStatus, name="verification_status"),
+        SAEnum(VerificationStatus, name="verification_status", values_callable=_vc),
         default=VerificationStatus.PENDING,
         nullable=False,
         index=True,
@@ -740,19 +758,19 @@ class FoodInspection(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     inspection_type: Mapped[InspectionType] = mapped_column(
-        SAEnum(InspectionType, name="inspection_type"),
+        SAEnum(InspectionType, name="inspection_type", values_callable=_vc),
         default=InspectionType.RANDOM,
         nullable=False,
     )
     inspection_status: Mapped[InspectionStatus] = mapped_column(
-        SAEnum(InspectionStatus, name="inspection_status"),
+        SAEnum(InspectionStatus, name="inspection_status", values_callable=_vc),
         default=InspectionStatus.PENDING,
         nullable=False,
         index=True,
     )
     inspection_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     violation_type: Mapped[ViolationType | None] = mapped_column(
-        SAEnum(ViolationType, name="violation_type"), nullable=True
+        SAEnum(ViolationType, name="violation_type", values_callable=_vc), nullable=True
     )
     inspection_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     report_url: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -782,13 +800,13 @@ class ViolationRecord(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     violation_type: Mapped[ViolationType] = mapped_column(
-        SAEnum(ViolationType, name="violation_type"), nullable=False
+        SAEnum(ViolationType, name="violation_type", values_callable=_vc), nullable=False
     )
     violation_severity: Mapped[ViolationSeverity] = mapped_column(
-        SAEnum(ViolationSeverity, name="violation_severity"), nullable=False
+        SAEnum(ViolationSeverity, name="violation_severity", values_callable=_vc), nullable=False
     )
     action_taken: Mapped[EnforcementAction] = mapped_column(
-        SAEnum(EnforcementAction, name="enforcement_action"), nullable=False
+        SAEnum(EnforcementAction, name="enforcement_action", values_callable=_vc), nullable=False
     )
     violation_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -817,11 +835,11 @@ class ComplaintRecord(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     complaint_type: Mapped[ComplaintType] = mapped_column(
-        SAEnum(ComplaintType, name="complaint_type"), nullable=False
+        SAEnum(ComplaintType, name="complaint_type", values_callable=_vc), nullable=False
     )
     complaint_description: Mapped[str] = mapped_column(Text, nullable=False)
     complaint_status: Mapped[ComplaintStatus] = mapped_column(
-        SAEnum(ComplaintStatus, name="complaint_status"),
+        SAEnum(ComplaintStatus, name="complaint_status", values_callable=_vc),
         default=ComplaintStatus.OPEN,
         nullable=False,
         index=True,
@@ -855,12 +873,12 @@ class InspectionSchedule(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     scheduled_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     inspection_type: Mapped[InspectionScheduleType] = mapped_column(
-        SAEnum(InspectionScheduleType, name="inspection_schedule_type"),
+        SAEnum(InspectionScheduleType, name="inspection_schedule_type", values_callable=_vc),
         default=InspectionScheduleType.ROUTINE,
         nullable=False,
     )
     schedule_status: Mapped[InspectionScheduleStatus] = mapped_column(
-        SAEnum(InspectionScheduleStatus, name="inspection_schedule_status"),
+        SAEnum(InspectionScheduleStatus, name="inspection_schedule_status", values_callable=_vc),
         default=InspectionScheduleStatus.SCHEDULED,
         nullable=False,
         index=True,
@@ -886,7 +904,7 @@ class ListingModeration(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     flagged_reason: Mapped[str] = mapped_column(Text, nullable=False)
     moderation_status: Mapped[ModerationStatus] = mapped_column(
-        SAEnum(ModerationStatus, name="moderation_status"),
+        SAEnum(ModerationStatus, name="moderation_status", values_callable=_vc),
         default=ModerationStatus.PENDING,
         nullable=False,
         index=True,
@@ -898,7 +916,7 @@ class ListingModeration(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     action_taken: Mapped[EnforcementAction | None] = mapped_column(
-        SAEnum(EnforcementAction, name="moderation_action"), nullable=True
+        SAEnum(EnforcementAction, name="moderation_action", values_callable=_vc), nullable=True
     )
 
 
@@ -914,7 +932,7 @@ class InspectorNotification(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     event_type: Mapped[InspectorNotificationType] = mapped_column(
-        SAEnum(InspectorNotificationType, name="inspector_notification_type"),
+        SAEnum(InspectorNotificationType, name="inspector_notification_type", values_callable=_vc),
         nullable=False,
         index=True,
     )

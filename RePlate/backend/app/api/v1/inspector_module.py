@@ -1,10 +1,12 @@
 """Inspector backend module router."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import require_inspector
+from app.models.food import FoodListing, SellerListingStatus
 from app.models.user import User
 from app.schemas.inspector_backend import (
     ComplaintCreateIn,
@@ -276,6 +278,119 @@ async def update_moderation_status(
 ):
     data = await ModerationService(db).update_status(moderation_id, current_user.id, body)
     return {"success": True, "data": data, "message": "Moderation updated"}
+
+
+# ── Seller Inspection Approve / Reject ────────────────────────────────────────
+
+
+@router.get("/pending-inspections")
+async def list_pending_inspections(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_inspector),
+):
+    """List all seller listings currently awaiting inspection approval."""
+    result = await db.execute(
+        select(FoodListing)
+        .where(FoodListing.moderation_status == "pending_inspection")
+        .order_by(FoodListing.updated_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    listings = result.scalars().all()
+    return {
+        "success": True,
+        "data": [
+            {
+                "id": l.id,
+                "title": l.title,
+                "seller_id": l.seller_id,
+                "moderation_status": l.moderation_status,
+                "seller_status": l.seller_status.value
+                if hasattr(l.seller_status, "value")
+                else str(l.seller_status),
+                "is_active": l.is_active,
+                "created_at": l.created_at.isoformat() if l.created_at else None,
+                "updated_at": l.updated_at.isoformat() if l.updated_at else None,
+            }
+            for l in listings
+        ],
+        "total": len(listings),
+    }
+
+
+@router.post("/listings/{listing_id}/approve")
+async def approve_listing_inspection(
+    listing_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_inspector),
+):
+    """
+    Inspector approves a seller's inspection request.
+    Sets moderation_status='approved', re-activates the listing.
+    """
+    result = await db.execute(select(FoodListing).where(FoodListing.id == listing_id))
+    listing = result.scalar_one_or_none()
+    if listing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
+    if listing.moderation_status != "pending_inspection":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Listing is not pending inspection (current: {listing.moderation_status})",
+        )
+    listing.moderation_status = "approved"
+    listing.seller_status = SellerListingStatus.ACTIVE
+    listing.is_active = True
+    await db.commit()
+    await db.refresh(listing)
+    return {
+        "success": True,
+        "data": {
+            "id": listing.id,
+            "moderation_status": listing.moderation_status,
+            "seller_status": listing.seller_status.value
+            if hasattr(listing.seller_status, "value")
+            else str(listing.seller_status),
+            "is_active": listing.is_active,
+        },
+        "message": "Listing approved and made active",
+    }
+
+
+@router.post("/listings/{listing_id}/reject")
+async def reject_listing_inspection(
+    listing_id: str,
+    reason: str = Body(default="", embed=True),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_inspector),
+):
+    """
+    Inspector rejects a seller's inspection request.
+    Sets moderation_status='rejected', listing stays paused.
+    """
+    result = await db.execute(select(FoodListing).where(FoodListing.id == listing_id))
+    listing = result.scalar_one_or_none()
+    if listing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
+    listing.moderation_status = "rejected"
+    listing.seller_status = SellerListingStatus.PAUSED
+    listing.is_active = False
+    await db.commit()
+    await db.refresh(listing)
+    return {
+        "success": True,
+        "data": {
+            "id": listing.id,
+            "moderation_status": listing.moderation_status,
+            "seller_status": listing.seller_status.value
+            if hasattr(listing.seller_status, "value")
+            else str(listing.seller_status),
+            "is_active": listing.is_active,
+            "reason": reason,
+        },
+        "message": "Listing inspection rejected",
+    }
 
 
 @router.get("/analytics")

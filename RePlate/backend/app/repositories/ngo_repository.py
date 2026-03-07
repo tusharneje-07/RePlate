@@ -18,6 +18,7 @@ from app.models.food import (
     NGOListingRequest,
     PickupRecord,
     PickupStatus,
+    SellerListingStatus,
     VerificationMethod,
 )
 from app.models.ngo import (
@@ -124,6 +125,7 @@ class NGODiscoveryRepository:
             .where(
                 FoodListing.is_donation == True,  # noqa: E712
                 FoodListing.is_active == True,  # noqa: E712
+                FoodListing.seller_status == SellerListingStatus.ACTIVE,
                 FoodListing.deleted_at.is_(None),
             )
         )
@@ -144,28 +146,42 @@ class NGODiscoveryRepository:
         result = await self.db.execute(stmt.order_by(FoodListing.created_at.desc()))
         all_rows = result.all()
 
+        now = _now()
+
         # Haversine post-filter + annotation
         annotated: list[dict] = []
         for listing, seller in all_rows:
+            if listing.quantity_available <= 0:
+                continue
+            if listing.expires_at:
+                try:
+                    expires_at = datetime.fromisoformat(listing.expires_at)
+                    if expires_at.tzinfo is None:
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    if expires_at <= now:
+                        continue
+                except Exception:
+                    pass
             dist: Optional[float] = None
-            if (
-                ngo_lat is not None
-                and ngo_lng is not None
-                and seller is not None
-                and seller.lat is not None
-                and seller.lng is not None
-            ):
-                dist = round(
-                    _haversine_km(
-                        float(ngo_lat),
-                        float(ngo_lng),
-                        float(seller.lat),
-                        float(seller.lng),
-                    ),
-                    2,
-                )
-                if max_distance_km is not None and dist > max_distance_km:
-                    continue
+            if ngo_lat is not None and ngo_lng is not None:
+                # Bug 6 fix: prefer SellerProfile coords; fall back to the
+                # denormalised seller_lat/seller_lng snapshotted on the listing
+                # itself (populated for consumer donations via geocoding).
+                donor_lat: float | None = None
+                donor_lng: float | None = None
+                if seller is not None and seller.lat is not None and seller.lng is not None:
+                    donor_lat = float(seller.lat)
+                    donor_lng = float(seller.lng)
+                elif listing.seller_lat is not None and listing.seller_lng is not None:
+                    donor_lat = float(listing.seller_lat)
+                    donor_lng = float(listing.seller_lng)
+                if donor_lat is not None and donor_lng is not None:
+                    dist = round(
+                        _haversine_km(float(ngo_lat), float(ngo_lng), donor_lat, donor_lng),
+                        2,
+                    )
+                    if max_distance_km is not None and dist > max_distance_km:
+                        continue
             annotated.append({"listing": listing, "seller": seller, "distance_from_ngo": dist})
 
         total = len(annotated)
@@ -187,35 +203,34 @@ class NGODonationRepository:
         requested_quantity: int,
         pickup_time: Optional[str],
     ) -> NGOListingRequest:
-        async with self.db.begin():
-            # Prevent duplicate active request
-            dup = await self.db.execute(
-                select(NGOListingRequest).where(
-                    NGOListingRequest.ngo_id == ngo_id,
-                    NGOListingRequest.listing_id == listing.id,
-                    NGOListingRequest.approval_status == DonationApprovalStatus.REQUESTED,
-                )
+        # Prevent duplicate active request
+        dup = await self.db.execute(
+            select(NGOListingRequest).where(
+                NGOListingRequest.ngo_id == ngo_id,
+                NGOListingRequest.listing_id == listing.id,
+                NGOListingRequest.approval_status == DonationApprovalStatus.REQUESTED,
             )
-            if dup.scalar_one_or_none():
-                raise ValueError("An active request already exists for this listing")
+        )
+        if dup.scalar_one_or_none():
+            raise ValueError("An active request already exists for this listing")
 
-            if listing.quantity_available < requested_quantity:
-                raise ValueError(
-                    f"Only {listing.quantity_available} units available; "
-                    f"requested {requested_quantity}"
-                )
-
-            req = NGOListingRequest(
-                id=_new_id(),
-                ngo_id=ngo_id,
-                listing_id=listing.id,
-                seller_id=listing.seller_id,
-                requested_quantity=requested_quantity,
-                pickup_time=pickup_time,
-                approval_status=DonationApprovalStatus.REQUESTED,
+        if listing.quantity_available < requested_quantity:
+            raise ValueError(
+                f"Only {listing.quantity_available} units available; requested {requested_quantity}"
             )
-            self.db.add(req)
 
+        req = NGOListingRequest(
+            id=_new_id(),
+            ngo_id=ngo_id,
+            listing_id=listing.id,
+            seller_id=listing.seller_id,
+            requested_quantity=requested_quantity,
+            pickup_time=pickup_time,
+            approval_status=DonationApprovalStatus.REQUESTED,
+        )
+        self.db.add(req)
+        await self.db.flush()
+        await self.db.commit()
         await self.db.refresh(req)
         return req
 

@@ -15,11 +15,14 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     ENVIRONMENT: Literal["development", "staging", "production"] = "development"
 
+    # ── Dev shortcut ───────────────────────────────────────────────────────────
+    # When True: skip WorkOS entirely and use local email+password auth
+    SKIP_WORKOS: bool = False
+
     # ── CORS ───────────────────────────────────────────────────────────────────
     # Comma-separated origins allowed to call the API
     ALLOWED_ORIGINS: str = (
-        "http://localhost:5173,http://localhost:5174,"
-        "http://localhost:5175,http://localhost:3000"
+        "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:3000"
     )
 
     @property
@@ -72,6 +75,11 @@ class Settings(BaseSettings):
     # Directory (relative to the backend/ working directory) where uploaded
     # files are stored.  Created automatically on startup if it does not exist.
     UPLOAD_DIR: str = "uploads"
+
+    # ── Groq AI ────────────────────────────────────────────────────────────────
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_ENDPOINT: str = "https://api.groq.com/openai/v1/chat/completions"
 
 
 settings = Settings()

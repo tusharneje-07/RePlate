@@ -20,9 +20,11 @@ async def lifespan(_app: FastAPI):
 
     # Import all models so SQLAlchemy's metadata is fully populated
     import app.models  # noqa: F401
+
     yield
     # Shutdown: dispose connection pool
     from app.core.database import engine
+
     await engine.dispose()
 
 
@@ -40,7 +42,13 @@ class CORSOnErrorMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         try:
             response = await call_next(request)
-        except Exception:
+        except Exception as exc:
+            # Log the exception before returning generic 500
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.exception(f"Unhandled exception in {request.method} {request.url.path}: {exc}")
+
             # Build a bare 500 so we can attach CORS headers below
             response = JSONResponse(
                 status_code=500,
@@ -90,6 +98,7 @@ def create_application() -> FastAPI:
 
     # ── Routers ────────────────────────────────────────────────────────────────
     from app.api.v1.router import api_router
+
     application.include_router(api_router)
 
     @application.get("/health", tags=["Health"])

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 from typing import Optional
+from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.food import DonationApprovalStatus
+from app.models.food import DonationApprovalStatus, SellerNotificationType
 from app.models.ngo import NGONotificationType
 from app.models.profiles import NGOVerificationStatus, NGOType
 from app.repositories.ngo_repository import (
@@ -22,6 +23,7 @@ from app.repositories.ngo_repository import (
     NGOProfileRepository,
     NGOServiceAreaRepository,
 )
+from app.repositories.seller_backend_repository import SellerNotificationRepository
 from app.schemas.ngo import (
     DonationListingOut,
     DonationRequestCreateIn,
@@ -171,6 +173,9 @@ def _listing_row_to_out(item, distance: Optional[float]) -> DonationListingOut:
         description=item.description,
         category=item.category,
         food_type=item.food_type.value if hasattr(item.food_type, "value") else str(item.food_type),
+        donor_role=item.donor_role.value
+        if hasattr(item.donor_role, "value")
+        else str(item.donor_role),
         quantity_available=int(item.quantity_available),
         quantity_unit=item.quantity_unit,
         original_price=float(item.original_price),
@@ -298,6 +303,7 @@ class NGODonationService:
     def __init__(self, db: AsyncSession) -> None:
         self.repo = NGODonationRepository(db)
         self.notif_repo = NGONotificationRepository(db)
+        self.seller_notif_repo = SellerNotificationRepository(db)
 
     async def create_request(
         self, ngo_id: str, body: DonationRequestCreateIn
@@ -313,12 +319,37 @@ class NGODonationService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Listing is no longer active"
             )
+        if listing.quantity_available <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Listing has no available quantity"
+            )
+        if listing.expires_at:
+            try:
+                expires_at = datetime.fromisoformat(listing.expires_at)
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if expires_at <= datetime.now(timezone.utc):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Listing already expired",
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                pass
         try:
             req = await self.repo.create_request(
                 ngo_id, listing, body.requested_quantity, body.pickup_time
             )
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        await self.seller_notif_repo.create(
+            listing.seller_id,
+            SellerNotificationType.NGO_PICKUP_REQUEST,
+            "New NGO donation request",
+            f"NGO requested {req.requested_quantity} units of {listing.title}.",
+            listing_id=listing.id,
+        )
         return _request_to_out(req, listing)
 
     async def list_requests(
@@ -348,6 +379,13 @@ class NGODonationService:
                 detail="Only REQUESTED requests can be cancelled",
             )
         updated = await self.repo.cancel_request(row)
+        await self.seller_notif_repo.create(
+            row.seller_id,
+            SellerNotificationType.NGO_PICKUP_REQUEST,
+            "Donation request cancelled",
+            f"NGO request {updated.id} cancelled.",
+            listing_id=updated.listing_id,
+        )
         return _request_to_out(updated)
 
 
@@ -357,6 +395,7 @@ class NGOPickupService:
         self.donation_repo = NGODonationRepository(db)
         self.impact_repo = NGOImpactRepository(db)
         self.notif_repo = NGONotificationRepository(db)
+        self.seller_notif_repo = SellerNotificationRepository(db)
 
     async def schedule_pickup(self, ngo_id: str, body: PickupScheduleIn) -> NGOPickupOut:
         req = await self.donation_repo.get_request(ngo_id, body.donation_request_id)
@@ -364,10 +403,7 @@ class NGOPickupService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Donation request not found"
             )
-        if req.approval_status not in {
-            DonationApprovalStatus.APPROVED,
-            DonationApprovalStatus.PICKED_UP,
-        }:
+        if req.approval_status != DonationApprovalStatus.APPROVED:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Pickup can only be scheduled for approved requests",
@@ -379,6 +415,13 @@ class NGOPickupService:
             "Pickup scheduled",
             f"Pickup code {record.pickup_code} generated for request {req.id}.",
             reference_id=record.id,
+        )
+        await self.seller_notif_repo.create(
+            req.seller_id,
+            SellerNotificationType.NGO_PICKUP_REQUEST,
+            "NGO pickup scheduled",
+            f"Pickup scheduled for request {req.id}.",
+            listing_id=req.listing_id,
         )
         return _pickup_to_out(record)
 
@@ -413,6 +456,16 @@ class NGOPickupService:
                     await self.impact_repo.create_for_pickup(
                         ngo_id, completed.donation_request_id, food_kg
                     )
+                except Exception:
+                    pass
+                try:
+                    listing = await self.donation_repo.get_listing(req.listing_id)
+                    if listing is not None and listing.quantity_available is not None:
+                        listing.quantity_available = max(
+                            0, int(listing.quantity_available) - int(req.requested_quantity)
+                        )
+                        self.donation_repo.db.add(listing)
+                        await self.donation_repo.db.commit()
                 except Exception:
                     pass
 

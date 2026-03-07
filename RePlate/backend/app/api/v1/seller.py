@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -11,6 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import require_seller
+from app.core.impact_constants import co2_from_food_kg
+
+# Default food weight per listing unit used when a seller does not specify
+# their own CO₂ figure.  Keeps impact stats non-zero for all listings.
+_DEFAULT_FOOD_WEIGHT_KG_PER_UNIT: float = 0.5
 from app.models.food import (
     FoodListing,
     Order,
@@ -132,6 +138,9 @@ def _map_listing(listing: FoodListing) -> dict:
         "add_to_cart_count": int(listing.cart_add_count or 0),
         "conversion_rate": 0,
         "expiry_rate": 0,
+        "moderation_status": listing.moderation_status
+        if hasattr(listing, "moderation_status")
+        else None,
         "created_at": listing.created_at.isoformat(),
         "updated_at": listing.updated_at.isoformat(),
     }
@@ -260,7 +269,9 @@ async def create_seller_listing(
         "pickup_start": body.pickup_start,
         "pickup_end": body.pickup_end,
         "expires_at": body.expires_at,
-        "co2_saved_per_unit": body.co2_saved_per_unit,
+        "co2_saved_per_unit": body.co2_saved_per_unit
+        if body.co2_saved_per_unit and body.co2_saved_per_unit > 0
+        else co2_from_food_kg(_DEFAULT_FOOD_WEIGHT_KG_PER_UNIT),
         "seller_name": profile.business_name
         if profile and profile.business_name
         else (current_user.email.split("@")[0]),
@@ -541,4 +552,202 @@ async def reply_seller_review(
         "seller_replied_at": review.seller_replied_at.isoformat()
         if review.seller_replied_at
         else datetime.utcnow().isoformat(),
+    }
+
+
+# ── Inspection Request ────────────────────────────────────────────────────────
+
+
+@router.post("/listings/{listing_id}/request-inspection", status_code=status.HTTP_200_OK)
+async def request_listing_inspection(
+    listing_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_seller),
+):
+    """
+    Seller submits a listing for food-inspector review.
+    Sets moderation_status = 'pending_inspection' and pauses the listing
+    from public view until the inspector approves it.
+    """
+    service = SellerService(db)
+    listing = await service.listings.get_for_seller(current_user.id, listing_id)
+    if listing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
+
+    if listing.moderation_status == "pending_inspection":
+        return {
+            "success": True,
+            "data": _map_listing(listing),
+            "message": "Inspection already requested — awaiting inspector review",
+        }
+
+    if listing.moderation_status == "approved":
+        return {
+            "success": True,
+            "data": _map_listing(listing),
+            "message": "Listing is already approved by inspector",
+        }
+
+    # Mark as pending inspection and remove from public browse
+    listing.moderation_status = "pending_inspection"
+    listing.seller_status = SellerListingStatus.PAUSED
+    listing.is_active = False
+    listing = await service.listings.save(listing)
+
+    return {
+        "success": True,
+        "data": _map_listing(listing),
+        "message": "Inspection request submitted — listing paused until approved",
+    }
+
+
+@router.get("/listings/{listing_id}/inspection-status", status_code=status.HTTP_200_OK)
+async def get_listing_inspection_status(
+    listing_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_seller),
+):
+    """Returns the current inspection/moderation status of a listing."""
+    service = SellerService(db)
+    listing = await service.listings.get_for_seller(current_user.id, listing_id)
+    if listing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
+
+    return {
+        "success": True,
+        "data": {
+            "listing_id": listing.id,
+            "moderation_status": listing.moderation_status or "not_submitted",
+            "seller_status": listing.seller_status.value
+            if hasattr(listing.seller_status, "value")
+            else str(listing.seller_status),
+            "is_active": listing.is_active,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# AI Pricing endpoint
+# ---------------------------------------------------------------------------
+
+
+class AiPriceRequest(BaseModel):
+    food_name: str
+    food_type: str | None = None
+    base_price: float = Field(..., gt=0)
+    expires_at: datetime
+    total_quantity: int = Field(..., gt=0)
+
+
+def _run_ai_pricing(
+    food_name: str,
+    original_price: float,
+    expires_at: datetime,
+    total_quantity: int,
+    food_type: str | None = None,
+) -> dict:
+    """Pure sync function — safe to call via asyncio.to_thread."""
+    from agent_systems.food_rescue_strategy_agent import (
+        ListingContext,
+        WeatherContext,
+        _load_env,
+        _remaining_hours,
+        _priority_level,
+        _discount_range,
+        _build_llm_prompt,
+        _call_groq,
+        _normalize_llm_output,
+        _failsafe_strategy,
+        _ngo_fallback,
+        _now,
+    )
+
+    _load_env()
+    now = _now()
+
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    listing = ListingContext(
+        food_id="new-listing",
+        food_name=food_name,
+        category=food_type or "General",
+        quantity_available=total_quantity,
+        original_price=original_price,
+        current_price=original_price,
+        manufacturing_time=now,
+        expiry_time=expires_at,
+        seller_id="unknown",
+        orders_today=0,
+    )
+    weather = WeatherContext(temperature=30.0, weather_condition="Clear")
+
+    remaining = _remaining_hours(expires_at, now)
+    priority = _priority_level(remaining, total_quantity)
+    discount_range = _discount_range(priority)
+    prompt = _build_llm_prompt(listing, weather, remaining, priority, discount_range)
+
+    try:
+        llm_output = _call_groq(prompt)
+        strategy = _normalize_llm_output(llm_output, listing, remaining, priority, discount_range)
+    except Exception:
+        strategy = _failsafe_strategy(listing, remaining, priority)
+
+    strategy["remaining_shelf_life_hours"] = round(remaining, 2)
+    return strategy
+
+
+@router.post("/ai-price")
+async def calculate_ai_price(
+    payload: AiPriceRequest,
+    current_user: User = Depends(require_seller),
+):
+    """Call the dynamic pricing agent and return suggested price + breakdown."""
+    expires_at = payload.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    try:
+        result = await asyncio.to_thread(
+            _run_ai_pricing,
+            payload.food_name,
+            payload.base_price,
+            expires_at,
+            payload.total_quantity,
+            payload.food_type,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Pricing agent error: {exc}",
+        )
+
+    suggested_price = result["suggested_price"]
+    discount_percent = round(result["recommended_discount"] * 100, 1)
+
+    ngo_fallback = result.get("ngo_fallback")
+    ngo_priority = isinstance(ngo_fallback, str) and ngo_fallback.startswith("Trigger")
+
+    return {
+        "success": True,
+        "data": {
+            "discounted_price": suggested_price,
+            "discount_percent": discount_percent,
+            "remaining_shelf_life_hours": result["remaining_shelf_life_hours"],
+            "pricing_factors": {
+                "category": result.get("priority_level", "N/A"),
+                "category_source": "agent",
+                "expiry_discount": result["recommended_discount"],
+                "inventory_discount": 0.0,
+                "urgency_discount": 0.0,
+                "distance_discount": 0.0,
+                "demand_adjustment": 0.0,
+                "weather_adjustment": 0.0,
+                "time_of_day_adjustment": 0.0,
+                "ngo_priority": ngo_priority,
+                "ngo_action": ngo_fallback if isinstance(ngo_fallback, str) else None,
+                "reprice_interval_minutes": 30,
+                "promotion_strategy": result.get("promotion_strategy", []),
+            },
+        },
     }

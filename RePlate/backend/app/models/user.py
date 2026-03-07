@@ -19,21 +19,22 @@ class UserRole(str, enum.Enum):
 class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """Single canonical user record.
 
-    WorkOS owns the identity (email, password, OAuth).
-    We store a reference to the WorkOS user and layer role/profile on top.
+    WorkOS owns the identity (email, password, OAuth) in production.
+    When SKIP_WORKOS=true we store a bcrypt password_hash locally.
     """
 
     __tablename__ = "users"
 
-    # ── WorkOS identity ────────────────────────────────────────────────────────
-    workos_user_id: Mapped[str] = mapped_column(
-        String(128), unique=True, nullable=False, index=True
+    # ── WorkOS identity (nullable when SKIP_WORKOS=true) ──────────────────────
+    workos_user_id: Mapped[str | None] = mapped_column(
+        String(128), unique=True, nullable=True, index=True
     )
 
+    # ── Local email/password (used when SKIP_WORKOS=true) ─────────────────────
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     # ── Basic identity (kept in sync with WorkOS) ──────────────────────────────
-    email: Mapped[str] = mapped_column(
-        String(255), unique=True, nullable=False, index=True
-    )
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     profile_picture_url: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -43,9 +44,7 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         Enum(UserRole, name="user_role"), nullable=True, default=None
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    is_email_verified: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )
+    is_email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # True once the user has completed role-specific onboarding
     is_onboarded: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

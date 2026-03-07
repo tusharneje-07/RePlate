@@ -21,6 +21,8 @@ from app.api.v1.pickups_module import router as seller_pickups_module_router
 from app.api.v1.notifications_module import router as seller_notifications_module_router
 from app.api.v1.analytics_module import router as seller_analytics_module_router
 from app.api.v1.ngo import router as ngo_router
+from app.api.v1.consumer import router as consumer_router
+from app.api.v1.ai_features import router as ai_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -41,5 +43,7 @@ api_router.include_router(seller_pickups_module_router)
 api_router.include_router(seller_notifications_module_router)
 api_router.include_router(seller_analytics_module_router)
 api_router.include_router(ngo_router)
+api_router.include_router(consumer_router)
 api_router.include_router(uploads_router)
 api_router.include_router(inspector_module_router)
+api_router.include_router(ai_router)

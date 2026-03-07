@@ -11,19 +11,24 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 import enum
 
 
+def _vc(enum_cls):
+    """Return enum values (not names) for SAEnum — fixes MySQL lowercase mismatch."""
+    return [e.value for e in enum_cls]
+
+
 class NGOVerificationStatus(str, enum.Enum):
-    PENDING = "pending"
-    VERIFIED = "verified"
-    REJECTED = "rejected"
+    PENDING = "PENDING"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
 
 
 class NGOType(str, enum.Enum):
-    FOOD_BANK = "food_bank"
-    SHELTER = "shelter"
-    COMMUNITY_KITCHEN = "community_kitchen"
-    ORPHANAGE = "orphanage"
-    OLD_AGE_HOME = "old_age_home"
-    OTHER = "other"
+    FOOD_BANK = "FOOD_BANK"
+    SHELTER = "SHELTER"
+    COMMUNITY_KITCHEN = "COMMUNITY_KITCHEN"
+    ORPHANAGE = "ORPHANAGE"
+    OLD_AGE_HOME = "OLD_AGE_HOME"
+    OTHER = "OTHER"
 
 
 # ── Shared enums ───────────────────────────────────────────────────────────────
@@ -64,7 +69,7 @@ class ConsumerProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # Dietary / preference tags (stored as comma-separated or JSON string)
     dietary_preferences: Mapped[str | None] = mapped_column(Text, nullable=True)
     completion_status: Mapped[ProfileCompletionStatus] = mapped_column(
-        SAEnum(ProfileCompletionStatus, name="consumer_profile_status"),
+        SAEnum(ProfileCompletionStatus, values_callable=_vc, name="consumer_profile_status"),
         default=ProfileCompletionStatus.INCOMPLETE,
         nullable=False,
     )
@@ -123,12 +128,12 @@ class SellerProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     verification_status: Mapped[SellerVerificationStatus] = mapped_column(
-        SAEnum(SellerVerificationStatus, name="seller_verification_status"),
+        SAEnum(SellerVerificationStatus, values_callable=_vc, name="seller_verification_status"),
         default=SellerVerificationStatus.PENDING,
         nullable=False,
     )
     completion_status: Mapped[ProfileCompletionStatus] = mapped_column(
-        SAEnum(ProfileCompletionStatus, name="seller_profile_status"),
+        SAEnum(ProfileCompletionStatus, values_callable=_vc, name="seller_profile_status"),
         default=ProfileCompletionStatus.INCOMPLETE,
         nullable=False,
     )
@@ -166,7 +171,7 @@ class NGOProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     logo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     completion_status: Mapped[ProfileCompletionStatus] = mapped_column(
-        SAEnum(ProfileCompletionStatus, name="ngo_profile_status"),
+        SAEnum(ProfileCompletionStatus, values_callable=_vc, name="ngo_profile_status"),
         default=ProfileCompletionStatus.INCOMPLETE,
         nullable=False,
     )
@@ -176,10 +181,10 @@ class NGOProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     lng: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
     operating_radius_km: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
     ngo_type: Mapped[NGOType | None] = mapped_column(
-        SAEnum(NGOType, name="ngo_type"), nullable=True
+        SAEnum(NGOType, values_callable=_vc, name="ngo_type"), nullable=True
     )
     verification_status: Mapped[NGOVerificationStatus] = mapped_column(
-        SAEnum(NGOVerificationStatus, name="ngo_verification_status"),
+        SAEnum(NGOVerificationStatus, values_callable=_vc, name="ngo_verification_status"),
         default=NGOVerificationStatus.PENDING,
         nullable=False,
     )
@@ -219,7 +224,7 @@ class InspectorProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     government_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_active_duty: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     completion_status: Mapped[ProfileCompletionStatus] = mapped_column(
-        SAEnum(ProfileCompletionStatus, name="inspector_profile_status"),
+        SAEnum(ProfileCompletionStatus, values_callable=_vc, name="inspector_profile_status"),
         default=ProfileCompletionStatus.INCOMPLETE,
         nullable=False,
     )

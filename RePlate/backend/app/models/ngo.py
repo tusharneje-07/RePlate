@@ -19,12 +19,17 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
+def _vc(enum_cls):
+    """Return enum values (not names) for SAEnum — fixes MySQL lowercase mismatch."""
+    return [e.value for e in enum_cls]
+
+
 class NGONotificationType(str, enum.Enum):
-    DONATION_REQUEST_APPROVED = "donation_request_approved"
-    DONATION_REQUEST_REJECTED = "donation_request_rejected"
-    PICKUP_SCHEDULED = "pickup_scheduled"
-    PICKUP_COMPLETED = "pickup_completed"
-    NEW_NEARBY_DONATION = "new_nearby_donation"
+    DONATION_REQUEST_APPROVED = "DONATION_REQUEST_APPROVED"
+    DONATION_REQUEST_REJECTED = "DONATION_REQUEST_REJECTED"
+    PICKUP_SCHEDULED = "PICKUP_SCHEDULED"
+    PICKUP_COMPLETED = "PICKUP_COMPLETED"
+    NEW_NEARBY_DONATION = "NEW_NEARBY_DONATION"
 
 
 class NGODistributionRecord(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -90,7 +95,7 @@ class NGONotification(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     event_type: Mapped[NGONotificationType] = mapped_column(
-        SAEnum(NGONotificationType, name="ngo_notification_type"),
+        SAEnum(NGONotificationType, values_callable=_vc, name="ngo_notification_type"),
         nullable=False,
         index=True,
     )

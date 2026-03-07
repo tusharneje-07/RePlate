@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import require_consumer
-from app.core.impact_constants import food_kg_from_co2
+from app.core.impact_constants import co2_from_food_kg, food_kg_from_co2
+
+# Default assumed food weight (kg) per listing unit when the seller has not
+# provided a co2_saved_per_unit value.  0.5 kg/unit is the same conservative
+# baseline used throughout the rest of the codebase.
+_DEFAULT_FOOD_WEIGHT_KG_PER_UNIT: float = 0.5
 from app.models.food import Order, OrderItem
 from app.models.user import User
 from app.repositories.food_repository import (
@@ -110,7 +115,13 @@ async def place_order(
         original = float(listing.original_price)
         subtotal = unit_price * item_in.quantity
         savings = (original - unit_price) * item_in.quantity
-        co2 = float(listing.co2_saved_per_unit or 0) * item_in.quantity
+        # Use the listing's stated co2_saved_per_unit when available and
+        # non-zero; otherwise fall back to the canonical formula applied to
+        # the default food weight so no order ever credits zero CO₂.
+        co2_per_unit = float(listing.co2_saved_per_unit or 0)
+        if co2_per_unit <= 0:
+            co2_per_unit = co2_from_food_kg(_DEFAULT_FOOD_WEIGHT_KG_PER_UNIT)
+        co2 = co2_per_unit * item_in.quantity
 
         total_amount += subtotal
         total_savings += savings
@@ -220,4 +231,33 @@ async def get_order(
     order = await order_repo.get_by_id_and_consumer(order_id, current_user.id)
     if order is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    return _build_order_out(order)
+
+
+from app.models.food import OrderStatus as _OrderStatus  # noqa: E402
+
+
+@router.post("/{order_id}/cancel", response_model=OrderOut)
+async def cancel_order(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_consumer),
+):
+    """Cancel a pending or confirmed order (consumer-initiated)."""
+    order_repo = OrderRepository(db)
+    order = await order_repo.get_by_id_and_consumer(order_id, current_user.id)
+    if order is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+
+    current_status = order.status.value if hasattr(order.status, "value") else str(order.status)
+    if current_status not in ("pending", "confirmed"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot cancel an order with status '{current_status}'",
+        )
+
+    order.status = _OrderStatus.CANCELLED
+    order.cancel_reason = "Cancelled by customer"
+    await db.commit()
+    await db.refresh(order)
     return _build_order_out(order)

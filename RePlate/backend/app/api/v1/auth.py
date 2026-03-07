@@ -10,6 +10,10 @@ Flow:
   7.  Frontend calls GET  /auth/me          → returns current user details.
   8.  Frontend calls PATCH /auth/me         → updates name fields.
   9.  Frontend calls POST /auth/signout     → clears session.
+
+When SKIP_WORKOS=true:
+  - POST /auth/local/login   → email + password → JWT
+  - POST /auth/local/register → email + password + role → JWT
 """
 
 from pydantic import BaseModel
@@ -36,6 +40,197 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 class UpdateMeRequest(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
+
+
+# ── Local Email/Password Auth (SKIP_WORKOS mode) ──────────────────────────────
+
+
+class LocalLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LocalRegisterRequest(BaseModel):
+    email: str
+    password: str
+    first_name: str | None = None
+    last_name: str | None = None
+    role: str = "CONSUMER"  # CONSUMER | SELLER | NGO
+
+
+@router.post(
+    "/local/login",
+    response_model=TokenResponse,
+    summary="[SKIP_WORKOS] Email + password login",
+)
+async def local_login(body: LocalLoginRequest, db: AsyncSession = Depends(get_db)):
+    from app.core.config import settings
+
+    if not settings.SKIP_WORKOS:
+        raise HTTPException(status_code=404, detail="Local auth disabled")
+
+    import bcrypt as _bcrypt_lib
+    from sqlalchemy import select
+
+    result = await db.execute(select(User).where(User.email == body.email))
+    user: User | None = result.scalar_one_or_none()
+
+    if (
+        not user
+        or not user.password_hash
+        or not _bcrypt_lib.checkpw(body.password.encode(), user.password_hash.encode())
+    ):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    token = create_access_token(
+        subject=user.id,
+        extra_claims={
+            "role": user.role.value if user.role else None,
+            "workos_id": None,
+        },
+    )
+    return TokenResponse(
+        access_token=token,
+        user_id=user.id,
+        email=user.email,
+        role=user.role.value if user.role else None,
+        is_onboarded=user.is_onboarded,
+        requires_role_selection=user.role is None,
+    )
+
+    try:
+        token = create_access_token(
+            subject=user.id,
+            extra_claims={
+                "role": role_value,
+                "workos_id": None,
+            },
+        )
+        print(f"Token created successfully", flush=True)
+    except Exception as e:
+        print(f"ERROR creating token: {e}", flush=True)
+        import traceback
+
+        traceback.print_exc()
+        raise
+
+    try:
+        response = TokenResponse(
+            access_token=token,
+            user_id=user.id,
+            email=user.email,
+            role=role_value,
+            is_onboarded=user.is_onboarded,
+            requires_role_selection=user.role is None,
+        )
+        print(f"TokenResponse created successfully", flush=True)
+        return response
+    except Exception as e:
+        print(f"ERROR creating TokenResponse: {e}", flush=True)
+        import traceback
+
+        traceback.print_exc()
+        raise
+
+    try:
+        token = create_access_token(
+            subject=user.id,
+            extra_claims={
+                "role": role_value,
+                "workos_id": None,
+            },
+        )
+        logger.info(f"Token created successfully")
+    except Exception as e:
+        logger.error(f"ERROR creating token: {e}", exc_info=True)
+        raise
+
+    try:
+        response = TokenResponse(
+            access_token=token,
+            user_id=user.id,
+            email=user.email,
+            role=role_value,
+            is_onboarded=user.is_onboarded,
+            requires_role_selection=user.role is None,
+        )
+        logger.info(f"TokenResponse created successfully")
+        return response
+    except Exception as e:
+        logger.error(f"ERROR creating TokenResponse: {e}", exc_info=True)
+        raise
+
+
+@router.post(
+    "/local/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="[SKIP_WORKOS] Email + password registration",
+)
+async def local_register(body: LocalRegisterRequest, db: AsyncSession = Depends(get_db)):
+    from app.core.config import settings
+
+    if not settings.SKIP_WORKOS:
+        raise HTTPException(status_code=404, detail="Local auth disabled")
+
+    import bcrypt as _bcrypt_lib
+    from sqlalchemy import select
+    import uuid
+    from app.models.user import UserRole
+    from app.models.profiles import ConsumerProfile, SellerProfile, NGOProfile
+
+    # Check duplicate
+    existing = await db.execute(select(User).where(User.email == body.email))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    # Validate role
+    role_map = {"CONSUMER": UserRole.CONSUMER, "SELLER": UserRole.SELLER, "NGO": UserRole.NGO}
+    role = role_map.get(body.role.upper())
+    if not role:
+        raise HTTPException(status_code=400, detail="Role must be CONSUMER, SELLER, or NGO")
+
+    # Create user
+    user = User(
+        id=str(uuid.uuid4()),
+        email=body.email,
+        password_hash=_bcrypt_lib.hashpw(body.password.encode(), _bcrypt_lib.gensalt()).decode(),
+        first_name=body.first_name,
+        last_name=body.last_name,
+        role=role,
+        is_email_verified=True,
+        is_onboarded=False,
+        workos_user_id=None,
+    )
+    db.add(user)
+    await db.flush()  # get id
+
+    # Create bare profile so /profiles/me works immediately
+    if role == UserRole.CONSUMER:
+        db.add(ConsumerProfile(id=str(uuid.uuid4()), user_id=user.id))
+    elif role == UserRole.SELLER:
+        db.add(SellerProfile(id=str(uuid.uuid4()), user_id=user.id))
+    elif role == UserRole.NGO:
+        db.add(NGOProfile(id=str(uuid.uuid4()), user_id=user.id))
+
+    await db.commit()
+    await db.refresh(user)
+
+    token = create_access_token(
+        subject=user.id,
+        extra_claims={
+            "role": user.role.value if user.role else None,
+            "workos_id": None,
+        },
+    )
+    return TokenResponse(
+        access_token=token,
+        user_id=user.id,
+        email=user.email,
+        role=user.role.value if user.role else None,
+        is_onboarded=user.is_onboarded,
+        requires_role_selection=False,
+    )
 
 
 # ── 1. Authorization URL ───────────────────────────────────────────────────────

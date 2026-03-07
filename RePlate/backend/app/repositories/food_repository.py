@@ -18,6 +18,7 @@ from app.models.food import (
     ImpactStat,
     ImpactLevel,
     OrderStatus,
+    SellerListingStatus,
 )
 
 
@@ -54,9 +55,12 @@ class FoodListingRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[FoodListing]:
+        now_iso = datetime.now(timezone.utc).isoformat()
         stmt = select(FoodListing).where(
             FoodListing.is_active == True,  # noqa: E712
             FoodListing.quantity_available > 0,
+            FoodListing.seller_status != SellerListingStatus.EXPIRED,
+            or_(FoodListing.expires_at.is_(None), FoodListing.expires_at > now_iso),
         )
         distance_expr = None
         if max_distance_km is not None and origin_lat is not None and origin_lng is not None:
@@ -156,15 +160,15 @@ class OrderRepository:
         return list(result.scalars().all())
 
     async def create(self, data: dict, items_data: list[dict]) -> Order:
-        async with self.db.begin():
-            order = Order(id=_new_id(), **data)
-            self.db.add(order)
-            await self.db.flush()  # get order.id
+        order = Order(id=_new_id(), **data)
+        self.db.add(order)
+        await self.db.flush()  # get order.id
 
-            for item_data in items_data:
-                item = OrderItem(id=_new_id(), order_id=order.id, **item_data)
-                self.db.add(item)
+        for item_data in items_data:
+            item = OrderItem(id=_new_id(), order_id=order.id, **item_data)
+            self.db.add(item)
 
+        await self.db.flush()
         await self.db.refresh(order)
         return order
 

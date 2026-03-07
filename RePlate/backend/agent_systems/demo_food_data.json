@@ -1,0 +1,62 @@
+[
+  {
+    "food_id": "demo-001",
+    "food_name": "Paneer Biryani",
+    "food_type": null,
+    "base_price": 220.0,
+    "manufactured_at": "2026-03-06T12:00:00Z",
+    "expires_at": "2026-03-06T20:00:00Z",
+    "inventory_qty": 18,
+    "seller_urgent": true,
+    "weather": { "temperature_c": 33.0, "humidity": 68.0, "is_raining": true },
+    "purchases": 8
+  },
+  {
+    "food_id": "demo-002",
+    "food_name": "Bakery Croissant Pack",
+    "food_type": null,
+    "base_price": 160.0,
+    "manufactured_at": "2026-03-06T08:00:00Z",
+    "expires_at": "2026-03-07T08:00:00Z",
+    "inventory_qty": 6,
+    "seller_urgent": false,
+    "weather": { "temperature_c": 28.0, "humidity": 52.0, "is_raining": false },
+    "purchases": 3
+  },
+  {
+    "food_id": "demo-003",
+    "food_name": "Fresh Mixed Fruit Bowl",
+    "food_type": null,
+    "base_price": 120.0,
+    "manufactured_at": "2026-03-06T05:30:00Z",
+    "expires_at": "2026-03-07T05:30:00Z",
+    "inventory_qty": 22,
+    "seller_urgent": false,
+    "weather": { "temperature_c": 38.5, "humidity": 70.0, "is_raining": false },
+    "purchases": 0
+  },
+  {
+    "food_id": "demo-004",
+    "food_name": "Packaged Masala Chips",
+    "food_type": null,
+    "base_price": 80.0,
+    "manufactured_at": "2026-02-28T09:00:00Z",
+    "expires_at": "2026-03-08T09:00:00Z",
+    "inventory_qty": 40,
+    "seller_urgent": false,
+    "weather": { "temperature_c": 24.0, "humidity": 45.0, "is_raining": false },
+    "purchases": 25
+  },
+  {
+    "food_id": "demo-005",
+    "food_name": "Curd Bowl",
+    "food_type": null,
+    "base_price": 70.0,
+    "manufactured_at": "2026-03-06T09:00:00Z",
+    "expires_at": "2026-03-06T18:30:00Z",
+    "inventory_qty": 10,
+    "seller_urgent": true,
+    "weather": { "temperature_c": 31.0, "humidity": 62.0, "is_raining": true },
+    "purchases": 0
+  }
+]
