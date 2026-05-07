@@ -551,7 +551,7 @@ async def reply_seller_review(
         "seller_reply": review.seller_reply,
         "seller_replied_at": review.seller_replied_at.isoformat()
         if review.seller_replied_at
-        else datetime.utcnow().isoformat(),
+        else datetime.now(timezone.utc).isoformat(),
     }
 
 

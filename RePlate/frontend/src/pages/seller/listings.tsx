@@ -43,7 +43,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { slideUp, staggerContainer, fadeIn, scaleIn } from '@/lib/motion'
-import { formatCurrency, formatRelativeTime } from '@/lib/utils'
+import { formatCurrency, formatRelativeTime, toLocalDatetimeStr, parseDatetimeLocalAsIST } from '@/lib/utils'
 import { uploadFile, sellerApi } from '@/lib/api'
 import type { AiPriceResponse } from '@/lib/api'
 import { useSellerStore } from '@/stores/seller-store'
@@ -165,9 +165,9 @@ function emptyForm(): Omit<SellerListing, 'id' | 'views' | 'addToCartCount' | 'c
 		totalQuantity: 1,
 		quantityAvailable: 1,
 		unit: 'item',
-		pickupStart: pickupStart.toISOString().slice(0, 16),
-		pickupEnd: pickupEnd.toISOString().slice(0, 16),
-		expiresAt: expiresAt.toISOString().slice(0, 16),
+		pickupStart: toLocalDatetimeStr(pickupStart),
+		pickupEnd: toLocalDatetimeStr(pickupEnd),
+		expiresAt: toLocalDatetimeStr(expiresAt),
 		status: 'draft',
 		co2SavedPerUnit: 0.5,
 	}
@@ -528,9 +528,9 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 					quantityAvailable: editListing.quantityAvailable,
 					unit: editListing.unit,
 					weight: editListing.weight,
-					pickupStart: editListing.pickupStart.slice(0, 16),
-					pickupEnd: editListing.pickupEnd.slice(0, 16),
-					expiresAt: editListing.expiresAt.slice(0, 16),
+					pickupStart: toLocalDatetimeStr(new Date(editListing.pickupStart)),
+					pickupEnd: toLocalDatetimeStr(new Date(editListing.pickupEnd)),
+					expiresAt: toLocalDatetimeStr(new Date(editListing.expiresAt)),
 					status: editListing.status,
 					co2SavedPerUnit: editListing.co2SavedPerUnit,
 				}
@@ -558,9 +558,9 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 						unit: editListing.unit,
 						weight: editListing.weight,
 						prepTimeMinutes: editListing.prepTimeMinutes,
-						pickupStart: editListing.pickupStart.slice(0, 16),
-						pickupEnd: editListing.pickupEnd.slice(0, 16),
-						expiresAt: editListing.expiresAt.slice(0, 16),
+						pickupStart: toLocalDatetimeStr(new Date(editListing.pickupStart)),
+						pickupEnd: toLocalDatetimeStr(new Date(editListing.pickupEnd)),
+						expiresAt: toLocalDatetimeStr(new Date(editListing.expiresAt)),
 						status: editListing.status,
 						co2SavedPerUnit: editListing.co2SavedPerUnit,
 					}
@@ -699,7 +699,7 @@ function ListingFormSheet({ open, editListing, onClose }: ListingFormSheetProps)
 				food_name: form.name.trim(),
 				food_type: form.category ?? null,
 				base_price: form.originalPrice,
-				expires_at: new Date(form.expiresAt).toISOString(),
+				expires_at: parseDatetimeLocalAsIST(form.expiresAt).toISOString(),
 				total_quantity: form.totalQuantity,
 			})
 			const envelope = res.data

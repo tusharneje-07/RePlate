@@ -24,7 +24,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useNGOStore } from '@/stores/ngo-store'
 import { useNGOUIStore } from '@/stores/ngo-ui-store'
-import { cn } from '@/lib/utils'
+import { cn, formatTimeIST } from '@/lib/utils'
 
 export function NGOPickupDetailPage() {
 	const { pickupId } = useParams()
@@ -118,7 +118,7 @@ export function NGOPickupDetailPage() {
 					{isCompleted && (
 						<div className='bg-[var(--color-success-light)] border-b border-[var(--color-success)]/20 p-4 flex items-center justify-center gap-2'>
 							<CheckCircle2 size={20} className='text-[var(--color-success)]' />
-							<span className='font-semibold text-[var(--color-success)]'>Successfully picked up at {new Date(pickup.actualPickupTime!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+							<span className='font-semibold text-[var(--color-success)]'>Successfully picked up at {formatTimeIST(pickup.actualPickupTime!)}</span>
 						</div>
 					)}
 					{isUrgent && !isCompleted && (
@@ -126,7 +126,7 @@ export function NGOPickupDetailPage() {
 							<AlertTriangle size={20} className='text-[var(--color-error)] flex-shrink-0 mt-0.5' />
 							<div>
 								<h3 className='font-bold text-[var(--color-error)]'>Urgent Pickup Required</h3>
-								<p className='text-sm text-[var(--color-error)]/80 font-medium'>Must collect before {new Date(pickup.donation.pickupEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} to avoid spoilage.</p>
+								<p className='text-sm text-[var(--color-error)]/80 font-medium'>Must collect before {formatTimeIST(pickup.donation.pickupEnd)} to avoid spoilage.</p>
 							</div>
 						</div>
 					)}
@@ -161,7 +161,7 @@ export function NGOPickupDetailPage() {
 											<span className='text-xs font-semibold'>Expires</span>
 										</div>
 										<p className={cn('font-bold', isUrgent ? 'text-[var(--color-error)]' : 'text-[var(--color-ngo-text-primary)]')}>
-											{new Date(pickup.donation.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+											{formatTimeIST(pickup.donation.expiresAt)}
 										</p>
 									</div>
 								</div>

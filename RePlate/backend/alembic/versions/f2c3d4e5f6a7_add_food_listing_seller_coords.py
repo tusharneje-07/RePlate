@@ -19,14 +19,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("food_listings", sa.Column("seller_lat", sa.Numeric(10, 7), nullable=True))
-    op.add_column("food_listings", sa.Column("seller_lng", sa.Numeric(10, 7), nullable=True))
-    op.create_index("ix_food_listings_seller_lat", "food_listings", ["seller_lat"])
-    op.create_index("ix_food_listings_seller_lng", "food_listings", ["seller_lng"])
+    # seller_lat and seller_lng are already added by f9b0c1d2e3f4 (inspector_backend_tables).
+    # This migration is a no-op kept for Alembic chain integrity.
+    pass
 
 
 def downgrade() -> None:
-    op.drop_index("ix_food_listings_seller_lng", table_name="food_listings")
-    op.drop_index("ix_food_listings_seller_lat", table_name="food_listings")
-    op.drop_column("food_listings", "seller_lng")
-    op.drop_column("food_listings", "seller_lat")
+    pass

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import {
@@ -26,8 +26,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { staggerContainer, slideUp, scaleIn } from '@/lib/motion'
-import { formatRelativeTime } from '@/lib/utils'
-import { cn } from '@/lib/utils'
+import { formatRelativeTime, formatTimeIST, cn } from '@/lib/utils'
 import { useNGOStore } from '@/stores/ngo-store'
 import type { Donation } from '@/types'
 import { NGOMatchPanel } from '@/components/ai/NGOMatchPanel'
@@ -55,8 +54,13 @@ export function NGODiscoverPage() {
 	const [showFilters, setShowFilters] = useState(false)
 	const [aiMatchOpen, setAiMatchOpen] = useState(false)
 
+	// Auto-refresh donations every time this page is visited
+	useEffect(() => {
+		refreshDonations()
+	}, [refreshDonations])
+
 	// Filter state
-	const [maxDistance, setMaxDistance] = useState<number>(10) // km
+	const [maxDistance, setMaxDistance] = useState<number>(50) // km
 	const [urgencyFilter, setUrgencyFilter] = useState<string[]>([])
 	const [minQuantity, setMinQuantity] = useState<number>(0)
 
@@ -125,7 +129,7 @@ export function NGODiscoverPage() {
 					)}
 				>
 					<SlidersHorizontal className='w-4 h-4' />
-					{(urgencyFilter.length > 0 || maxDistance < 10 || minQuantity > 0) && !showFilters && (
+					{(urgencyFilter.length > 0 || maxDistance < 50 || minQuantity > 0) && !showFilters && (
 						<span className='absolute top-2 right-2.5 w-2 h-2 rounded-full bg-[var(--color-ngo-accent)] border border-white' />
 					)}
 				</Button>
@@ -189,13 +193,13 @@ export function NGODiscoverPage() {
 							{(urgencyFilter.length > 0 || maxDistance < 10 || minQuantity > 0 || activeCategory !== 'all' || searchQuery) && (
 								<Button
 									variant='outline'
-									onClick={() => {
-										setSearchQuery('')
-										setActiveCategory('all')
-										setUrgencyFilter([])
-										setMaxDistance(10)
-										setMinQuantity(0)
-									}}
+							onClick={() => {
+									setSearchQuery('')
+									setActiveCategory('all')
+									setUrgencyFilter([])
+									setMaxDistance(50)
+									setMinQuantity(0)
+								}}
 									className='mt-4 rounded-full border-[var(--color-ngo-border)]'
 								>
 									Clear all filters
@@ -264,7 +268,7 @@ export function NGODiscoverPage() {
 													<div className='flex-1 flex justify-between items-center'>
 														<span className='text-[var(--color-ngo-text-secondary)] font-medium'>Expires</span>
 														<span className={cn('font-bold', don.urgency === 'critical' ? 'text-[var(--color-error)]' : 'text-[var(--color-ngo-text-primary)]')}>
-															{new Date(don.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+															{formatTimeIST(don.expiresAt)}
 														</span>
 													</div>
 												</div>
@@ -345,18 +349,18 @@ export function NGODiscoverPage() {
 											<label className='text-sm font-semibold text-[var(--color-ngo-text-primary)]'>Maximum Distance</label>
 											<span className='text-xs font-bold text-[var(--color-ngo-accent)]'>{maxDistance} km</span>
 										</div>
-										<input
-											type="range"
-											min="1"
-											max="25"
-											value={maxDistance}
-											onChange={(e) => setMaxDistance(Number(e.target.value))}
-											className='w-full accent-[var(--color-ngo-accent)]'
-										/>
-										<div className='flex justify-between text-[10px] text-[var(--color-ngo-text-muted)]'>
-											<span>1 km</span>
-											<span>25 km</span>
-										</div>
+									<input
+										type="range"
+										min="1"
+										max="50"
+										value={maxDistance}
+										onChange={(e) => setMaxDistance(Number(e.target.value))}
+										className='w-full accent-[var(--color-ngo-accent)]'
+									/>
+									<div className='flex justify-between text-[10px] text-[var(--color-ngo-text-muted)]'>
+										<span>1 km</span>
+										<span>50 km</span>
+									</div>
 									</div>
 
 									{/* Minimum Quantity */}
@@ -382,15 +386,15 @@ export function NGODiscoverPage() {
 								</div>
 
 								<div className='p-4 border-t border-[var(--color-ngo-border)] bg-[var(--color-ngo-bg)] flex gap-3'>
-									<Button
-										variant='outline'
-										className='flex-1 border-[var(--color-ngo-border)]'
-										onClick={() => {
-											setUrgencyFilter([])
-											setMaxDistance(10)
-											setMinQuantity(0)
-										}}
-									>
+								<Button
+									variant='outline'
+									className='flex-1 border-[var(--color-ngo-border)]'
+									onClick={() => {
+										setUrgencyFilter([])
+										setMaxDistance(50)
+										setMinQuantity(0)
+									}}
+								>
 										Reset
 									</Button>
 									<Button className='flex-[2] bg-[var(--color-ngo-accent)] hover:bg-[var(--color-ngo-accent-hover)] text-white' onClick={() => setShowFilters(false)}>
@@ -473,8 +477,8 @@ export function NGODiscoverPage() {
 														<Clock size={14} />
 														<span className='text-xs'>Expires At</span>
 													</div>
-													<p className={cn('font-bold text-lg', selectedDonation.urgency === 'critical' ? 'text-[var(--color-error)]' : 'text-[var(--color-ngo-text-primary)]')}>
-														{new Date(selectedDonation.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+						<p className={cn('font-bold text-lg', selectedDonation.urgency === 'critical' ? 'text-[var(--color-error)]' : 'text-[var(--color-ngo-text-primary)]')}>
+													{formatTimeIST(selectedDonation.expiresAt)}
 													</p>
 													<p className='text-[10px] text-[var(--color-ngo-text-muted)]'>Must be consumed by</p>
 												</div>
@@ -498,7 +502,7 @@ export function NGODiscoverPage() {
 													<Clock size={16} className='text-[var(--color-ngo-text-muted)] mt-0.5' />
 													<div>
 														<p className='text-sm font-medium text-[var(--color-ngo-text-primary)]'>
-															{new Date(selectedDonation.pickupStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(selectedDonation.pickupEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+															{formatTimeIST(selectedDonation.pickupStart)} – {formatTimeIST(selectedDonation.pickupEnd)}
 														</p>
 														<p className='text-xs text-[var(--color-ngo-text-muted)] mt-0.5'>Allowed pickup window</p>
 													</div>
@@ -559,7 +563,7 @@ export function NGODiscoverPage() {
 											</div>
 											<h4 className='text-xl font-bold font-[var(--font-display)] text-[var(--color-ngo-text-primary)]'>Commitment Required</h4>
 											<p className='text-[var(--color-ngo-text-secondary)] text-sm max-w-sm'>
-												By claiming <strong>{selectedDonation.quantityKg}kg</strong> of food, you commit to picking it up before <strong>{new Date(selectedDonation.pickupEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>.
+												By claiming <strong>{selectedDonation.quantityKg}kg</strong> of food, you commit to picking it up before <strong>{formatTimeIST(selectedDonation.pickupEnd)}</strong>.
 											</p>
 											<div className='p-4 bg-[var(--color-ngo-bg)] rounded-[var(--radius-lg)] border border-[var(--color-ngo-border)] text-left w-full mt-4 space-y-2'>
 												<div className='flex items-start gap-2 text-sm'>
@@ -568,7 +572,7 @@ export function NGODiscoverPage() {
 												</div>
 												<div className='flex items-start gap-2 text-sm'>
 													<CheckCircle2 size={16} className='text-[var(--color-success)] flex-shrink-0 mt-0.5' />
-													<span className='text-[var(--color-ngo-text-secondary)]'>I will distribute this food safely before expiry ({new Date(selectedDonation.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}).</span>
+													<span className='text-[var(--color-ngo-text-secondary)]'>I will distribute this food safely before expiry ({formatTimeIST(selectedDonation.expiresAt)}).</span>
 												</div>
 											</div>
 										</div>

@@ -25,7 +25,7 @@ function adaptProfile(p: NGOProfileOut): NGOProfile {
 		operatingHours: { open: p.open_time ?? '07:00', close: p.close_time ?? '21:00' },
 		closedDays: Array.isArray(p.closed_days) ? p.closed_days : [],
 		pickupCapacityKg: p.serving_capacity ?? 100,
-		vehicleType: (p.vehicle_type as NGOProfile['vehicleType']) ?? 'bike',
+		vehicleType: (p.vehicle_type as NGOProfile['vehicleType']) ?? 'bicycle',
 		verificationStatus: (p.verification_status as NGOProfile['verificationStatus']) ?? 'pending',
 		ngoRegistrationDoc: p.document_url ?? '',
 		panNumber: '',
@@ -33,7 +33,7 @@ function adaptProfile(p: NGOProfileOut): NGOProfile {
 		totalMealsServed: 0, // TODO: Get from analytics API
 		totalCo2PreventedKg: 0, // TODO: Get from analytics API
 		totalPickupsCompleted: 0, // TODO: Get from analytics API
-		memberSince: p.created_at ?? new Date().toISOString(),
+		memberSince: new Date().toISOString(),
 		rating: 0,
 		reviewCount: 0,
 	}
@@ -214,7 +214,7 @@ export const useNGOStore = create<NGOState>()(
 				operatingHours: { open: '07:00', close: '21:00' },
 				closedDays: [],
 				pickupCapacityKg: 100,
-				vehicleType: 'bike',
+				vehicleType: 'bicycle',
 				verificationStatus: 'pending',
 				ngoRegistrationDoc: '',
 				panNumber: '',
@@ -260,7 +260,7 @@ export const useNGOStore = create<NGOState>()(
 						},
 						ngoId: donationRequest.ngo_id,
 						scheduledAt: donationRequest.pickup_time ?? now,
-						status: 'pending',
+						status: 'claimed',
 						priority: 'normal',
 						verificationCode: donationRequest.pickup_code,
 						qrCode: donationRequest.pickup_code,
@@ -368,9 +368,12 @@ export const useNGOStore = create<NGOState>()(
 			initialize: async () => {
 				if (get().isLoaded) return
 				try {
-					const [profileRes, donationsRes, pickupsRes, notificationsRes] = await Promise.allSettled([
+					// NOTE: donations are intentionally NOT fetched here.
+					// Each page that needs donations calls refreshDonations() on mount.
+					// Fetching here would race with refreshDonations() and the loser
+					// would overwrite the winner's result, causing missing listings.
+					const [profileRes, pickupsRes, notificationsRes] = await Promise.allSettled([
 						ngoApi.getProfile(),
-						ngoApi.browseDonations({ limit: 50 }),
 						ngoApi.listPickups({ limit: 50 }),
 						ngoApi.listNotifications({ limit: 30 }),
 					])
@@ -379,12 +382,6 @@ export const useNGOStore = create<NGOState>()(
 
 					if (profileRes.status === 'fulfilled') {
 						updates.profile = adaptProfile(profileRes.value.data)
-					}
-
-					if (donationsRes.status === 'fulfilled') {
-						const raw = donationsRes.value.data
-						const listings: DonationListingOut[] = Array.isArray(raw) ? raw : (raw as { data: DonationListingOut[] }).data ?? []
-						updates.donations = listings.map(adaptDonationListing)
 					}
 
 					if (pickupsRes.status === 'fulfilled') {

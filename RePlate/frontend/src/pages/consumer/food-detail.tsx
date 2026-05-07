@@ -29,7 +29,7 @@ import { Rating } from '@/components/common/rating'
 import { useCartStore } from '@/stores/cart-store'
 import { listingsApi, favoritesApi } from '@/lib/api'
 import { mapListingToFoodItem } from '@/lib/mappers'
-import { formatCurrency, formatDistance, calculateDiscount } from '@/lib/utils'
+import { formatCurrency, formatDistance, calculateDiscount, formatTimeIST, formatDateIST } from '@/lib/utils'
 import { slideUp, staggerContainer } from '@/lib/motion'
 
 export function FoodDetailPage() {
@@ -257,7 +257,7 @@ export function FoodDetailPage() {
 					icon: Clock,
 					label: 'Pickup Window',
 					value: pickupStart && pickupEnd
-						? `${pickupStart.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })} – ${pickupEnd.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`
+						? `${formatTimeIST(pickupStart)} – ${formatTimeIST(pickupEnd)}`
 						: 'See store hours',
 					color: isUrgent ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-primary)]',
 				},
@@ -307,9 +307,9 @@ export function FoodDetailPage() {
 							<span>Manufactured</span>
 						</div>
 						<span className='font-medium text-[var(--color-text-primary)]'>
-							{new Date(food.manufacturedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-							{' · '}
-							{new Date(food.manufacturedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+						{formatDateIST(new Date(food.manufacturedAt), { day: 'numeric', month: 'short', year: 'numeric' })}
+						{' · '}
+						{formatTimeIST(new Date(food.manufacturedAt))}
 						</span>
 					</div>
 				)}
@@ -319,9 +319,9 @@ export function FoodDetailPage() {
 						<span>Best Before</span>
 					</div>
 					<span className={`font-medium ${isUrgent ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-primary)]'}`}>
-						{new Date(food.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-						{' · '}
-						{new Date(food.expiresAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+					{formatDateIST(new Date(food.expiresAt), { day: 'numeric', month: 'short', year: 'numeric' })}
+					{' · '}
+					{formatTimeIST(new Date(food.expiresAt))}
 					</span>
 				</div>
 				<div className='flex items-center justify-between text-xs'>

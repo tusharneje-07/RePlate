@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { staggerContainer, slideUp } from '@/lib/motion'
 import { useInspectorStore } from '@/stores/inspector-store'
 import { useInspectorUIStore } from '@/stores/inspector-ui-store'
+import { formatDateIST } from '@/lib/utils'
 
 export function InspectorInspectionsPage() {
 	const { fieldInspections, addFieldInspection, profile } = useInspectorStore()
@@ -88,7 +89,7 @@ export function InspectorInspectionsPage() {
 								<div className='grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3'>
 									<div className='rounded-[var(--radius-md)] border border-[var(--color-inspector-border-subtle)] bg-[var(--color-inspector-surface-elevated)] p-2.5'>
 										<div className='flex items-center gap-1 text-[11px] text-[var(--color-inspector-text-muted)]'><CalendarDays className='w-3.5 h-3.5' />Inspected On</div>
-										<p className='text-xs font-semibold text-[var(--color-inspector-text-primary)] mt-1'>{new Date(item.inspectionDate).toLocaleDateString()}</p>
+										<p className='text-xs font-semibold text-[var(--color-inspector-text-primary)] mt-1'>{formatDateIST(new Date(item.inspectionDate))}</p>
 									</div>
 									<div className='rounded-[var(--radius-md)] border border-[var(--color-inspector-border-subtle)] bg-[var(--color-inspector-surface-elevated)] p-2.5'>
 										<div className='flex items-center gap-1 text-[11px] text-[var(--color-inspector-text-muted)]'><ClipboardCheck className='w-3.5 h-3.5' />Violations</div>

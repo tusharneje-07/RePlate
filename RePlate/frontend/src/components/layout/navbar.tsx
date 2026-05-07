@@ -1,7 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Bell, MapPin, Search, ShoppingCart, Menu, Sprout } from 'lucide-react'
-import { motion, AnimatePresence } from 'motion/react'
-import { Button } from '@/components/ui/button'
+import { Bell, MapPin, ShoppingCart, Sprout } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { useCartStore } from '@/stores/cart-store'
 import { useUIStore } from '@/stores/ui-store'
@@ -16,7 +14,7 @@ interface NavbarProps {
 
 export function Navbar({ title, showBack: _showBack }: NavbarProps) {
 	const { totalItems } = useCartStore()
-	const { toggleSidebar, setNotificationSheetOpen, setIsSearchOpen } = useUIStore()
+	const { setNotificationSheetOpen } = useUIStore()
 	const { location, openPicker } = useLocationStore()
 	const { user } = useAuth()
 	// No consumer notifications API yet — badge hidden until backend is available
@@ -28,16 +26,8 @@ export function Navbar({ title, showBack: _showBack }: NavbarProps) {
 	return (
 		<header className='sticky top-0 z-30 bg-[var(--color-surface-card)]/90 backdrop-blur-md border-b border-[var(--color-border)] h-[64px] flex items-center'>
 			<div className='flex items-center justify-between w-full px-4 md:px-6 gap-3'>
-				{/* Left: Mobile menu + Logo / Title */}
+				{/* Left: Logo / Title */}
 				<div className='flex items-center gap-3 min-w-0'>
-					<button
-						type='button'
-						onClick={toggleSidebar}
-						className='lg:hidden p-2 -ml-2 rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-elevated)] hover:text-[var(--color-text-primary)] transition-colors'
-					>
-						<Menu size={20} />
-					</button>
-
 					{title ? (
 						<h1 className='text-lg font-bold font-[var(--font-display)] text-[var(--color-text-primary)] truncate'>
 							{title}
@@ -66,15 +56,6 @@ export function Navbar({ title, showBack: _showBack }: NavbarProps) {
 
 				{/* Right: Actions */}
 				<div className='flex items-center gap-1.5'>
-					{/* Search (mobile) */}
-					<button
-						type='button'
-						onClick={() => setIsSearchOpen(true)}
-						className='md:hidden p-2 rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-elevated)] transition-colors'
-					>
-						<Search size={20} />
-					</button>
-
 					{/* Notifications */}
 					<button
 						type='button'

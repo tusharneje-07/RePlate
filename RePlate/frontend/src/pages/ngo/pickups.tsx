@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { staggerContainer, slideUp } from '@/lib/motion'
-import { cn } from '@/lib/utils'
+import { cn, formatTimeIST } from '@/lib/utils'
 import { useNGOStore } from '@/stores/ngo-store'
 import type { NGOPickup } from '@/types'
 
@@ -208,7 +208,7 @@ export function NGOPickupsPage() {
 														<div className='flex items-center gap-2'>
 															<Clock size={14} className={isUrgent ? 'text-[var(--color-error)]' : 'text-[var(--color-ngo-text-muted)]'} />
 															<span className={isUrgent ? 'text-[var(--color-error)] font-bold' : 'text-[var(--color-ngo-text-secondary)]'}>
-																Due by {new Date(pickup.donation.pickupEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+																Due by {formatTimeIST(pickup.donation.pickupEnd)}
 															</span>
 														</div>
 														<div className='flex items-center gap-1 text-[var(--color-ngo-accent)] font-semibold bg-[var(--color-ngo-accent-light)] px-2 py-0.5 rounded'>
@@ -220,7 +220,7 @@ export function NGOPickupsPage() {
 														<div className='flex items-center gap-2'>
 															<CheckCircle2 size={14} className='text-[var(--color-success)]' />
 															<span className='text-[var(--color-ngo-text-secondary)]'>
-																Picked up at {new Date(pickup.actualPickupTime || pickup.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+																Picked up at {formatTimeIST(pickup.actualPickupTime || pickup.scheduledAt)}
 															</span>
 														</div>
 														<span className='font-semibold text-[var(--color-success)]'>+{pickup.donation.quantityKg}kg rescued</span>

@@ -22,7 +22,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { staggerContainer, slideUp, fadeIn } from '@/lib/motion'
-import { formatRelativeTime } from '@/lib/utils'
+import { formatRelativeTime, formatTimeIST } from '@/lib/utils'
 import { useNGOStore } from '@/stores/ngo-store'
 import { cn } from '@/lib/utils'
 
@@ -164,7 +164,7 @@ function ActivePickups() {
 											</p>
 										</div>
 										<span className='text-xs font-semibold text-[var(--color-ngo-text-primary)]'>
-											{new Date(pickup.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+											{formatTimeIST(pickup.scheduledAt)}
 										</span>
 									</div>
 									<div className='flex items-center gap-2 mt-1'>

@@ -11,7 +11,7 @@ import {
 	CalendarCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn, formatCurrency, formatDistance } from '@/lib/utils'
+import { cn, formatCurrency, formatDistance, formatTimeIST } from '@/lib/utils'
 import { cardHover } from '@/lib/motion'
 import { useCartStore } from '@/stores/cart-store'
 import type { FoodItem } from '@/types'
@@ -36,8 +36,7 @@ function getExpiryLabel(expiresAt: string): { label: string; urgent: boolean } {
 
 function getPickupLabel(pickupStart: string | null, pickupEnd: string | null): string {
 	if (!pickupStart || !pickupEnd) return 'See store hours'
-	const fmt = (d: Date) =>
-		d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })
+	const fmt = (d: Date) => formatTimeIST(d)
 	return `${fmt(new Date(pickupStart))} – ${fmt(new Date(pickupEnd))}`
 }
 

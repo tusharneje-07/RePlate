@@ -5,6 +5,89 @@ export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs))
 }
 
+// ── IST (India Standard Time, UTC+5:30) helpers ───────────────────────────────
+// All datetime display and datetime-local input values must use IST.
+// These helpers are the single source of truth for IST formatting.
+
+const IST = 'Asia/Kolkata'
+
+/**
+ * Format a Date (or ISO string) as a time string in IST, e.g. "03:45 PM".
+ * Use this everywhere toLocaleTimeString() was used.
+ */
+export function formatTimeIST(date: Date | string, hour12 = true): string {
+	const d = typeof date === 'string' ? new Date(date) : date
+	return new Intl.DateTimeFormat('en-IN', {
+		hour: '2-digit',
+		minute: '2-digit',
+		hour12,
+		timeZone: IST,
+	}).format(d)
+}
+
+/**
+ * Format a Date (or ISO string) as a date string in IST, e.g. "7 Mar 2026".
+ */
+export function formatDateIST(date: Date | string, options?: Intl.DateTimeFormatOptions): string {
+	const d = typeof date === 'string' ? new Date(date) : date
+	return new Intl.DateTimeFormat('en-IN', {
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric',
+		timeZone: IST,
+		...options,
+	}).format(d)
+}
+
+/**
+ * Format a Date (or ISO string) as a date+time string in IST.
+ */
+export function formatDateTimeIST(date: Date | string, options?: Intl.DateTimeFormatOptions): string {
+	const d = typeof date === 'string' ? new Date(date) : date
+	return new Intl.DateTimeFormat('en-IN', {
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
+		hour12: true,
+		timeZone: IST,
+		...options,
+	}).format(d)
+}
+
+/**
+ * Convert a Date to a "YYYY-MM-DDTHH:MM" string in IST local time.
+ * Use this for the `value`, `min`, and `max` props of <input type="datetime-local">.
+ * Never use new Date().toISOString().slice(0,16) — that gives UTC, not IST.
+ */
+export function toLocalDatetimeStr(date: Date): string {
+	const parts = new Intl.DateTimeFormat('en-CA', {
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+		hour: '2-digit',
+		minute: '2-digit',
+		hour12: false,
+		timeZone: IST,
+	}).formatToParts(date)
+
+	const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '00'
+	const hh = get('hour') === '24' ? '00' : get('hour') // midnight edge-case
+	return `${get('year')}-${get('month')}-${get('day')}T${hh}:${get('minute')}`
+}
+
+/**
+ * Parse a datetime-local string (YYYY-MM-DDTHH:MM) entered by the user
+ * as IST and return a proper UTC Date object.
+ * Use this when reading form.someField from a datetime-local input before
+ * sending to the backend.
+ */
+export function parseDatetimeLocalAsIST(localStr: string): Date {
+	// localStr is "YYYY-MM-DDTHH:MM" — we interpret it as IST (+05:30)
+	return new Date(`${localStr}:00+05:30`)
+}
+
 export function formatCurrency(amount: number, currency = 'INR'): string {
 	return new Intl.NumberFormat('en-IN', {
 		style: 'currency',
@@ -24,6 +107,7 @@ export function formatPickupTime(date: Date): string {
 		hour: '2-digit',
 		minute: '2-digit',
 		hour12: true,
+		timeZone: IST,
 	}).format(date)
 }
 

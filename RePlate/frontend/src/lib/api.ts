@@ -20,17 +20,41 @@ api.interceptors.request.use((config) => {
 	return config
 })
 
-// ── Response interceptor — handle 401 ────────────────────────
+// ── Response interceptor — handle 401 / 403 ──────────────────
 api.interceptors.response.use(
 	(response) => response,
 	(error: AxiosError) => {
-		if (error.response?.status === 401) {
+		const status = error.response?.status
+
+		if (status === 401) {
 			localStorage.removeItem(TOKEN_KEY)
 			// Redirect to login only if not already there
 			if (!window.location.pathname.startsWith('/auth')) {
 				window.location.href = '/auth/login'
 			}
 		}
+
+		if (status === 403) {
+			// Decode the stored token to decide where to send the user.
+			// 403 means the token is valid but the role is wrong for this endpoint.
+			const token = localStorage.getItem(TOKEN_KEY)
+			const payload = token ? decodeToken(token) : null
+			const role = payload?.role as string | null | undefined
+
+			if (!role) {
+				// User never completed role selection — send them to pick a role.
+				if (!window.location.pathname.startsWith('/auth')) {
+					window.location.href = '/auth/select-role'
+				}
+			} else {
+				// User has a role but is accessing a wrong-role endpoint
+				// (e.g. a seller hitting a consumer-only route). Redirect to their dashboard.
+				if (!window.location.pathname.startsWith(`/${role.toLowerCase()}`)) {
+					window.location.href = `/${role.toLowerCase()}/dashboard`
+				}
+			}
+		}
+
 		return Promise.reject(error)
 	},
 )

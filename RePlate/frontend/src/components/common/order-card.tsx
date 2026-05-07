@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { Clock, MapPin, Leaf, CheckCircle2, Circle, XCircle, Package, ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { cn, formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency, formatDateIST, formatTimeIST } from '@/lib/utils'
 import { cardHover } from '@/lib/motion'
 import type { Order, OrderStatus } from '@/types'
 
@@ -80,8 +80,8 @@ export function OrderCard({ order }: OrderCardProps) {
 					<div className='flex items-center gap-3'>
 						<span className='flex items-center gap-1'>
 							<Clock size={10} />
-							{pickupDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}{' '}
-							{pickupDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+						{formatDateIST(pickupDate, { day: 'numeric', month: 'short' })}{' '}
+						{formatTimeIST(pickupDate)}
 						</span>
 						<span className='flex items-center gap-1 text-[var(--color-eco)]'>
 							<Leaf size={10} />

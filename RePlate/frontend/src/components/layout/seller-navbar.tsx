@@ -1,8 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Bell, Menu, Sprout, Store, ChevronRight } from 'lucide-react'
+import { Bell, Sprout, Store, ChevronRight } from 'lucide-react'
 import { motion } from 'motion/react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
-import { useSellerUIStore } from '@/stores/seller-ui-store'
 import { useSellerStore } from '@/stores/seller-store'
 
 interface SellerNavbarProps {
@@ -10,7 +9,6 @@ interface SellerNavbarProps {
 }
 
 export function SellerNavbar({ title }: SellerNavbarProps) {
-	const { toggleSidebar } = useSellerUIStore()
 	const { unreadCount, profile } = useSellerStore()
 	const location = useLocation()
 	const ownerName = profile?.ownerName ?? 'Seller'
@@ -36,16 +34,8 @@ export function SellerNavbar({ title }: SellerNavbarProps) {
 	return (
 		<header className='sticky top-0 z-30 bg-[var(--color-seller-surface)]/90 backdrop-blur-md border-b border-[var(--color-seller-border)] h-[64px] flex items-center'>
 			<div className='flex items-center justify-between w-full px-4 md:px-6 gap-3'>
-				{/* Left: Mobile menu toggle + Logo / Page title */}
+				{/* Left: Logo / Page title */}
 				<div className='flex items-center gap-3 min-w-0'>
-					<button
-						type='button'
-						onClick={toggleSidebar}
-						className='lg:hidden p-2 -ml-2 rounded-[var(--radius-md)] text-[var(--color-seller-text-muted)] hover:bg-[var(--color-seller-surface-elevated)] hover:text-[var(--color-seller-text-primary)] transition-colors'
-					>
-						<Menu size={20} />
-					</button>
-
 					{/* Mobile: Logo */}
 					<Link
 						to='/seller/dashboard'

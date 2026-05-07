@@ -98,68 +98,6 @@ async def local_login(body: LocalLoginRequest, db: AsyncSession = Depends(get_db
         requires_role_selection=user.role is None,
     )
 
-    try:
-        token = create_access_token(
-            subject=user.id,
-            extra_claims={
-                "role": role_value,
-                "workos_id": None,
-            },
-        )
-        print(f"Token created successfully", flush=True)
-    except Exception as e:
-        print(f"ERROR creating token: {e}", flush=True)
-        import traceback
-
-        traceback.print_exc()
-        raise
-
-    try:
-        response = TokenResponse(
-            access_token=token,
-            user_id=user.id,
-            email=user.email,
-            role=role_value,
-            is_onboarded=user.is_onboarded,
-            requires_role_selection=user.role is None,
-        )
-        print(f"TokenResponse created successfully", flush=True)
-        return response
-    except Exception as e:
-        print(f"ERROR creating TokenResponse: {e}", flush=True)
-        import traceback
-
-        traceback.print_exc()
-        raise
-
-    try:
-        token = create_access_token(
-            subject=user.id,
-            extra_claims={
-                "role": role_value,
-                "workos_id": None,
-            },
-        )
-        logger.info(f"Token created successfully")
-    except Exception as e:
-        logger.error(f"ERROR creating token: {e}", exc_info=True)
-        raise
-
-    try:
-        response = TokenResponse(
-            access_token=token,
-            user_id=user.id,
-            email=user.email,
-            role=role_value,
-            is_onboarded=user.is_onboarded,
-            requires_role_selection=user.role is None,
-        )
-        logger.info(f"TokenResponse created successfully")
-        return response
-    except Exception as e:
-        logger.error(f"ERROR creating TokenResponse: {e}", exc_info=True)
-        raise
-
 
 @router.post(
     "/local/register",

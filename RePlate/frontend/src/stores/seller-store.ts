@@ -9,6 +9,7 @@ import type {
 	SellerReview,
 } from '@/types'
 import { authApi, profileApi, sellerApi } from '@/lib/api'
+import { parseDatetimeLocalAsIST } from '@/lib/utils'
 import {
 	mapSellerAnalyticsOutToSellerAnalytics,
 	mapSellerListingOutToSellerListing,
@@ -69,9 +70,9 @@ function listingPayloadFromState(listing: Partial<SellerListing>) {
 		total_quantity: listing.totalQuantity,
 		quantity_available: listing.quantityAvailable,
 		unit: listing.unit,
-		pickup_start: listing.pickupStart,
-		pickup_end: listing.pickupEnd,
-		expires_at: listing.expiresAt,
+		pickup_start: listing.pickupStart ? parseDatetimeLocalAsIST(listing.pickupStart).toISOString() : listing.pickupStart,
+		pickup_end: listing.pickupEnd ? parseDatetimeLocalAsIST(listing.pickupEnd).toISOString() : listing.pickupEnd,
+		expires_at: listing.expiresAt ? parseDatetimeLocalAsIST(listing.expiresAt).toISOString() : listing.expiresAt,
 		status: listing.status,
 		co2_saved_per_unit: listing.co2SavedPerUnit,
 	}

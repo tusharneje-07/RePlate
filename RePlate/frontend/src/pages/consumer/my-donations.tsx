@@ -7,13 +7,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { staggerContainer, slideUp, fadeIn } from '@/lib/motion'
 import { consumerApi, type SurplusDonationOut } from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { cn, formatDateTimeIST } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 
 // ── Helpers ────────────────────────────────────────────────────
 
 function formatDate(iso: string): string {
-	return new Date(iso).toLocaleDateString('en-IN', {
+	return formatDateTimeIST(iso, {
 		day: '2-digit',
 		month: 'short',
 		year: 'numeric',

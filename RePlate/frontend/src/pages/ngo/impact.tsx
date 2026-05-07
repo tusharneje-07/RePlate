@@ -7,7 +7,7 @@ import { staggerContainer, slideUp, fadeIn } from '@/lib/motion'
 import { useQuery } from '@tanstack/react-query'
 import { useNGOStore } from '@/stores/ngo-store'
 import { ngoApi } from '@/lib/api'
-import { CO2_PER_TREE_YEAR, CO2_PER_CAR_KM, CO2_PER_FLIGHT_MUM_DEL } from '@/lib/utils'
+import { CO2_PER_TREE_YEAR, CO2_PER_CAR_KM, CO2_PER_FLIGHT_MUM_DEL, formatDateIST } from '@/lib/utils'
 
 // ── Mini bar chart ─────────────────────────────────────────────
 function BarChart({
@@ -108,6 +108,8 @@ export function NGOImpactPage() {
 		totalPickups: dashboard?.total_pickups_completed ?? 0,
 		activePickups: pickups.filter(p => p.status !== 'completed' && p.status !== 'cancelled').length,
 		communityReach: dashboard?.total_beneficiaries_served ?? 0,
+		streak: 0,
+		topCategories: [] as Array<{ category: string; percent: number }>,
 		// Generate empty weekly/monthly data arrays for now
 		weeklyData: Array.from({ length: 7 }, (_, i) => ({
 			day: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i],
@@ -119,7 +121,7 @@ export function NGOImpactPage() {
 			const date = new Date()
 			date.setMonth(date.getMonth() - (5 - i))
 			return {
-				month: date.toLocaleDateString('en-US', { month: 'short' }),
+				month: formatDateIST(date, { month: 'short' }),
 				foodKg: 0,
 				meals: 0,
 				pickups: 0,

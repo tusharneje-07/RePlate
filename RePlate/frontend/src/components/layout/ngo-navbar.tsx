@@ -1,8 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Bell, Menu, Leaf, ChevronRight, Building2 } from 'lucide-react'
+import { Bell, Leaf, ChevronRight, Building2 } from 'lucide-react'
 import { motion } from 'motion/react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
-import { useNGOUIStore } from '@/stores/ngo-ui-store'
 import { useNGOStore } from '@/stores/ngo-store'
 import { cn } from '@/lib/utils'
 
@@ -11,7 +10,6 @@ interface NGONavbarProps {
 }
 
 export function NGONavbar({ title }: NGONavbarProps) {
-	const { toggleSidebar } = useNGOUIStore()
 	const { profile, unreadCount } = useNGOStore()
 	const location = useLocation()
 
@@ -34,16 +32,8 @@ export function NGONavbar({ title }: NGONavbarProps) {
 	return (
 		<header className='sticky top-0 z-30 bg-[var(--color-ngo-surface)]/90 backdrop-blur-md border-b border-[var(--color-ngo-border)] h-[64px] flex items-center'>
 			<div className='flex items-center justify-between w-full px-4 md:px-6 gap-3'>
-				{/* Left: Mobile menu toggle + Logo / Page title */}
+				{/* Left: Logo / Page title */}
 				<div className='flex items-center gap-3 min-w-0'>
-					<button
-						type='button'
-						onClick={toggleSidebar}
-						className='lg:hidden p-2 -ml-2 rounded-[var(--radius-md)] text-[var(--color-ngo-text-muted)] hover:bg-[var(--color-ngo-surface-elevated)] hover:text-[var(--color-ngo-text-primary)] transition-colors'
-					>
-						<Menu size={20} />
-					</button>
-
 					{/* Mobile: Logo */}
 					<Link
 						to='/ngo/dashboard'

@@ -52,14 +52,15 @@ export function LoginPage() {
 		setIsLoading(true)
 		try {
 			const { data } = await authApi.localLogin(email.trim(), password)
-			const payload = await login(data.access_token)
-			const role = payload.role?.toLowerCase()
-			if (!role) {
+			// Store the token and load /auth/me
+			await login(data.access_token)
+			// Use the backend's authoritative flag first, fall back to role in response body
+			if (data.requires_role_selection || !data.role) {
 				navigate('/auth/select-role', { replace: true })
 			} else if (!data.is_onboarded) {
-				navigate(`/${role}/onboarding`, { replace: true })
+				navigate(`/${data.role.toLowerCase()}/onboarding`, { replace: true })
 			} else {
-				navigate(`/${role}/dashboard`, { replace: true })
+				navigate(`/${data.role.toLowerCase()}/dashboard`, { replace: true })
 			}
 		} catch (err: unknown) {
 			const status = (err as { response?: { status?: number } })?.response?.status

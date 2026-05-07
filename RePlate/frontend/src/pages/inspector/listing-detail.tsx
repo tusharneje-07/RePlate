@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { useInspectorStore } from '@/stores/inspector-store'
-import { formatRelativeTime } from '@/lib/utils'
+import { formatRelativeTime, formatDateTimeIST } from '@/lib/utils'
 
 function RiskBadge({ level }: { level: 'low' | 'moderate' | 'high' | 'critical' }) {
 	const cls = {
@@ -175,7 +175,7 @@ export function InspectorListingDetailPage() {
 								</div>
 								<div className='rounded-[var(--radius-md)] border border-[var(--color-inspector-border-subtle)] p-2.5 bg-[var(--color-inspector-surface-elevated)]'>
 									<div className='flex items-center gap-1 text-[var(--color-inspector-text-muted)]'><Clock3 className='w-3.5 h-3.5' />Prepared At</div>
-									<p className='mt-1 font-semibold text-[var(--color-inspector-text-primary)]'>{new Date(listing.safetyDeclaration.preparationTime).toLocaleString()}</p>
+									<p className='mt-1 font-semibold text-[var(--color-inspector-text-primary)]'>{formatDateTimeIST(new Date(listing.safetyDeclaration.preparationTime))}</p>
 								</div>
 								<div className='rounded-[var(--radius-md)] border border-[var(--color-inspector-border-subtle)] p-2.5 bg-[var(--color-inspector-surface-elevated)]'>
 									<div className='flex items-center gap-1 text-[var(--color-inspector-text-muted)]'><Thermometer className='w-3.5 h-3.5' />Temp Requirement</div>

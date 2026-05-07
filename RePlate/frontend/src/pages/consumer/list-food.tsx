@@ -25,7 +25,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { cn, formatDateTimeIST } from '@/lib/utils'
 import { staggerContainer, slideUp, fadeIn } from '@/lib/motion'
 import type { DietaryTag, FoodCategory, StorageType, PackagingCondition } from '@/types'
 
@@ -323,11 +323,26 @@ function Step1({ form, update }: { form: ListingForm; update: (k: keyof ListingF
 	)
 }
 
+// ── Helpers ───────────────────────────────────────────────
+// Format a Date as "YYYY-MM-DDTHH:MM" in local browser time (IST).
+// datetime-local inputs display and interpret values as local time,
+// so min/max must also be expressed in local time — NOT UTC ISO strings.
+function toLocalDatetimeStr(d: Date): string {
+	const pad = (n: number) => String(n).padStart(2, '0')
+	return (
+		d.getFullYear() + '-' +
+		pad(d.getMonth() + 1) + '-' +
+		pad(d.getDate()) + 'T' +
+		pad(d.getHours()) + ':' +
+		pad(d.getMinutes())
+	)
+}
+
 // ── Step 2: Quantity & Time ───────────────────────────────
 function Step2({ form, update }: { form: ListingForm; update: (k: keyof ListingForm, v: string) => void }) {
-	// Max expiry = 24h from now
-	const nowIso = new Date().toISOString().slice(0, 16)
-	const maxExpiryIso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
+	// Max expiry = 24h from now — expressed in LOCAL time for datetime-local inputs
+	const nowIso = toLocalDatetimeStr(new Date())
+	const maxExpiryIso = toLocalDatetimeStr(new Date(Date.now() + 24 * 60 * 60 * 1000))
 
 	return (
 		<motion.div variants={staggerContainer} initial='hidden' animate='visible' className='space-y-5'>
@@ -589,7 +604,7 @@ function Step4({
 							{ icon: Utensils, label: 'Food', value: form.foodName || '—' },
 							{ icon: CalendarClock, label: 'Event', value: form.eventType || '—' },
 							{ icon: Scale, label: 'Quantity', value: form.quantityKg ? `~${form.quantityKg} kg` : '—' },
-							{ icon: Clock, label: 'Expires', value: form.expiresAt ? new Date(form.expiresAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—' },
+							{ icon: Clock, label: 'Expires', value: form.expiresAt ? formatDateTimeIST(new Date(form.expiresAt), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', year: undefined }) : '—' },
 							{ icon: MapPin, label: 'Pickup', value: form.pickupLocation || '—' },
 							{ icon: Thermometer, label: 'Storage', value: STORAGE_TYPES.find(s => s.value === form.storageType)?.label || '—' },
 						].map(({ icon: Icon, label, value }) => (
@@ -777,15 +792,20 @@ export function ListFoodPage() {
 		setSubmitting(true)
 		setSubmitError(null)
 		try {
-			// Build pickup ISO strings from today's date + form time
-			const today = new Date().toISOString().slice(0, 10)
+			// Build pickup ISO strings from today's LOCAL date + form time.
+			// Use local date (not UTC) so IST users get the correct date after midnight UTC.
+			const localNow = new Date()
+			const pad = (n: number) => String(n).padStart(2, '0')
+			const today = `${localNow.getFullYear()}-${pad(localNow.getMonth() + 1)}-${pad(localNow.getDate())}`
 			const pickupStartIso = form.pickupStart ? `${today}T${form.pickupStart}:00` : null
 			const pickupEndIso = form.pickupEnd ? `${today}T${form.pickupEnd}:00` : null
 
-			// Enforce 24h expiry cap
-			const maxExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-			const requestedExpiry = form.expiresAt ? new Date(form.expiresAt).toISOString() : maxExpiry
-			const expiresAt = requestedExpiry > maxExpiry ? maxExpiry : requestedExpiry
+			// Enforce 24h expiry cap.
+			// datetime-local values are interpreted by the browser as local time,
+			// so new Date(form.expiresAt) correctly converts IST → UTC internally.
+			const maxExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000)
+			const requestedExpiry = form.expiresAt ? new Date(form.expiresAt) : maxExpiry
+			const expiresAt = (requestedExpiry > maxExpiry ? maxExpiry : requestedExpiry).toISOString()
 
 			// Map dietary tag to food_type enum (backend expects 'nonveg', not 'non-veg')
 			const foodType =

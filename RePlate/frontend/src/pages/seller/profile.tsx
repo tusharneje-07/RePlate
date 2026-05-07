@@ -26,7 +26,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { staggerContainer, slideUp, fadeIn } from '@/lib/motion'
-import { cn } from '@/lib/utils'
+import { cn, formatDateIST } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { profileApi, sellerApi, uploadFile, type SellerProfileOut, type SellerProfilePayload } from '@/lib/api'
 
@@ -37,7 +37,7 @@ function formatCompact(n: number): string {
 }
 
 function formatMemberSince(iso: string): string {
-	return new Date(iso).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+	return formatDateIST(new Date(iso), { month: 'long', year: 'numeric' })
 }
 
 const CATEGORY_LABELS: Record<string, string> = {

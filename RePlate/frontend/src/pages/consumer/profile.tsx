@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Progress } from '@/components/ui/progress'
 import { staggerContainer, slideUp } from '@/lib/motion'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatDateIST } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { profileApi, impactApi, ordersApi, userApi, type ConsumerProfilePayload } from '@/lib/api'
 import { mapImpactStatsOut } from '@/lib/mappers'
@@ -330,7 +330,7 @@ export function ProfilePage() {
 		{user && (
 			<motion.div variants={slideUp} className='text-center'>
 				<p className='text-xs text-[var(--color-text-muted)]'>
-					Member since {new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+					Member since {formatDateIST(new Date(), { month: 'long', year: 'numeric' })}
 				</p>
 			</motion.div>
 		)}

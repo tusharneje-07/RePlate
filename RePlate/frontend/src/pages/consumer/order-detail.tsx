@@ -21,7 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { staggerContainer, slideUp } from '@/lib/motion'
-import { formatCurrency, cn } from '@/lib/utils'
+import { formatCurrency, cn, formatDateIST, formatTimeIST } from '@/lib/utils'
 import { ordersApi } from '@/lib/api'
 import { mapOrderOutToOrder } from '@/lib/mappers'
 import type { OrderStatus } from '@/types'
@@ -118,7 +118,7 @@ export function OrderDetailPage() {
 					<div className='flex items-center gap-2 mt-0.5'>
 						<Badge variant={badgeConfig.variant} className='text-[10px]'>{badgeConfig.label}</Badge>
 						<span className='text-xs text-[var(--color-text-muted)]'>
-							{new Date(order.placedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+							{formatDateIST(new Date(order.placedAt), { day: 'numeric', month: 'short', year: 'numeric' })}
 						</span>
 					</div>
 				</div>
@@ -234,8 +234,8 @@ export function OrderDetailPage() {
 				<div className='flex items-center gap-2.5'>
 					<Clock size={15} className='text-[var(--color-brand-accent)] flex-shrink-0' />
 					<p className='text-sm text-[var(--color-text-secondary)]'>
-						{pickupDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })},{' '}
-						{pickupDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+						{formatDateIST(pickupDate, { weekday: 'short', day: 'numeric', month: 'short' })},{' '}
+						{formatTimeIST(pickupDate)}
 					</p>
 				</div>
 				<div className='flex gap-2 pt-1'>
